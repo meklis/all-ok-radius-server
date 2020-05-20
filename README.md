@@ -88,7 +88,7 @@
 {
     "statusCode": 200,
     "data": {
-        "ip_ddress": "172.16.3.233",
+        "ip_address": "172.16.3.233",
         "lease_time_sec": 3600
     }
 }
