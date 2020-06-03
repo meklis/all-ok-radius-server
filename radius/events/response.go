@@ -10,6 +10,8 @@ type Response struct {
 	IpAddress    string    `json:"ip_address"`
 	PoolName     string    `json:"pool_name"`
 	LeaseTimeSec int       `json:"lease_time_sec"`
+	Status       string    `json:"status"`
+	Error        string    `json:"error"`
 }
 
 type RadiusResponseType int

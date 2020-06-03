@@ -3,6 +3,7 @@ package radius
 import (
 	"errors"
 	"fmt"
+	"github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/prom"
 	"github.com/meklis/all-ok-radius-server/radius/events"
 	"github.com/meklis/all-ok-radius-server/redback"
@@ -16,14 +17,29 @@ import (
 func (rad *Radius) handler(w radius.ResponseWriter, r *radius.Request) {
 	req, _ := rad._handlerReadRequest(r)
 	resp, err := rad._handlerProccessApi(req)
+
 	if err != nil {
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error get answer from api's: %v", err.Error())
 		rad.lg.DebugF(tracerr.Sprint(err))
+		rad._handlerWriteResponseRejected(w, r)
+		resp.Status = "REJECTED"
+		resp.Error = fmt.Sprintf("error get answer from api's: %v", err.Error())
+		rad.api.SendPostAuth(api.PostAuth{
+			Request:  req,
+			Response: *resp,
+		})
 		return
 	} else if resp.IpAddress == "" && resp.PoolName == "" {
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error get answer from api's: pool_name and ip_address is empty")
+		rad._handlerWriteResponseRejected(w, r)
+		resp.Status = "REJECTED"
+		resp.Error = fmt.Sprintf("error get answer from api's: pool_name and ip_address is empty")
+		rad.api.SendPostAuth(api.PostAuth{
+			Request:  req,
+			Response: *resp,
+		})
 		return
 	}
 	prom.RadRequestsInc(req.NasIp)
@@ -35,13 +51,24 @@ func (rad *Radius) handler(w radius.ResponseWriter, r *radius.Request) {
 	}
 	rad.lg.DebugF("%v %x: response from api - poolName=%v ipAddr=%v leaseTimeSec=%v", r.Code, r.Authenticator, resp.PoolName, resp.IpAddress, resp.LeaseTimeSec)
 	err = rad._handlerWriteResponse(*resp, w, r)
-
 	if err != nil {
+		rad._handlerWriteResponseRejected(w, r)
+		resp.Status = "REJECTED"
+		resp.Error = fmt.Sprintf("error write response: %v", err.Error())
+		rad.api.SendPostAuth(api.PostAuth{
+			Request:  req,
+			Response: *resp,
+		})
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error write response: %v", err.Error())
 		rad.lg.DebugF(tracerr.Sprint(err))
 		return
 	}
+	resp.Status = "ACCEPT"
+	rad.api.SendPostAuth(api.PostAuth{
+		Request:  req,
+		Response: *resp,
+	})
 }
 
 func (rad *Radius) _handlerProccessApi(request events.Request) (*events.Response, error) {
@@ -101,7 +128,6 @@ func (rad *Radius) _handlerReadRequest(r *radius.Request) (events.Request, error
 
 func (rad *Radius) _handlerWriteResponse(response events.Response, w radius.ResponseWriter, r *radius.Request) error {
 	r.Attributes = make(radius.Attributes)
-
 	switch response.GetRadiusResponseType() {
 	case events.SetPool:
 		if err := rfc2869.FramedPool_Set(r.Packet, []byte(response.PoolName)); err != nil {
@@ -128,6 +154,17 @@ func (rad *Radius) _handlerWriteResponse(response events.Response, w radius.Resp
 	r.Code = radius.CodeAccessAccept
 	rad.lg.DebugF("%v %x: ipAddress='%v', poolName='%v', lease_time='%v'", r.Code, r.Authenticator, response.IpAddress, response.PoolName, response.LeaseTimeSec)
 
+	err := w.Write(r.Packet)
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+	return nil
+}
+
+func (rad *Radius) _handlerWriteResponseRejected(w radius.ResponseWriter, r *radius.Request) error {
+	r.Attributes = make(radius.Attributes)
+	r.Code = radius.CodeAccessReject
+	rad.lg.DebugF("%v %x: Rejected request'", r.Code, r.Authenticator)
 	err := w.Write(r.Packet)
 	if err != nil {
 		return tracerr.Wrap(err)

@@ -24,8 +24,8 @@ type Api struct {
 func Init(conf ApiConfig, lg *logger.Logger) *Api {
 	api := new(Api)
 	api.Conf = conf
-	api.cache = cache.Init(conf.Caching.TimeoutExpires)
-	api.sources = sources.New(conf.Addresses, lg, conf.AliveChecking.DisableTimeout)
+	api.cache = cache.Init(conf.RadReply.Caching.TimeoutExpires)
+	api.sources = sources.New(conf.RadReply.Addresses, lg, conf.RadReply.AliveChecking.DisableTimeout)
 	api.lg = lg
 	return api
 }
@@ -52,7 +52,7 @@ func (a *Api) Get(req *events.Request) (*events.Response, error) {
 	} else if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	actualizeTime := time.Now().Add(a.Conf.Caching.ActualizeTimeout)
+	actualizeTime := time.Now().Add(a.Conf.RadReply.Caching.ActualizeTimeout)
 	if actualizeTime.After(time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))) {
 		a.lg.Warningf("Detected lease_time_sec has a small time. Actualize time will be set as lease time")
 		actualizeTime = time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))
@@ -60,6 +60,26 @@ func (a *Api) Get(req *events.Request) (*events.Response, error) {
 	apiResp.Time = actualizeTime
 	a.cache.Set(hash, *apiResp)
 	return apiResp, nil
+}
+func (a *Api) SendPostAuth(auth PostAuth) {
+	if !a.Conf.PostAuth.Enabled {
+		return
+	}
+	go func() {
+		for _, addr := range a.Conf.PostAuth.Addresses {
+			response, err := req.Post(addr, req.BodyJSON(&auth))
+			if err != nil {
+				prom.ErrorsInc(prom.Error, "api")
+				a.lg.ErrorF("Post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+				continue
+			}
+			if response.Response().StatusCode != 200 {
+				prom.ErrorsInc(prom.Error, "api")
+				a.lg.ErrorF("Post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+				continue
+			}
+		}
+	}()
 }
 
 func (a *Api) _getFromApi(request *events.Request) (*events.Response, error) {

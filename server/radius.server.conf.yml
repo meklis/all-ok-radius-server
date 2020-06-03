@@ -29,22 +29,30 @@ api:
   # Можно указать несколько API адресов. Они будут использоваться равномерно, по принципу round-robin.
   # Можно использовать для распределения нагрузки или как для резервирования.
   # Недоступные API будут исключаться из списка на некоторое время
-  addresses:
-   - http://apiv2.loc/v2/trusted/equipment/radius
-  # Конфигурирование действий при недоступности API
-  # Недоступностью считается - ошибки HTTP >= 500, проблемы с коннектом (connection timeout, connection refused, fail resolve domain)
-  alive_checking:
+  radreply:
+    # Настройки кеширования
+    # Кеширование используется для уменьшения количества запросов к API.
+    # Так же, если установить expire_timeout на много больше actualize_timeout это позволит хранить ответы с АПИ в памяти радиуса
+    # и в случае отказа АПИ будут использоваться данные из него.
+    #
+    # Стоит учитывать что actualize_time не может быть больше lease_time_sec. Если подобное случается, устанавливается время лиза
+    caching:
+      actualize_timeout: 1m # Как часто нужно актуализироовать данные с API, даже если они есть в кеше
+      enabled: true
+      expire_timeout: 60m
+
+    # Конфигурирование действий при недоступности API
+    # Недоступностью считается - ошибки HTTP >= 500, проблемы с коннектом (connection timeout, connection refused, fail resolve domain)
+    alive_checking:
+      enabled: true
+      disable_timeout: 60s # На это время API-адрес будет исключен из списка
+    addresses:
+      - http://apiv2.loc/v2/trusted/equipment/radius-request
+
+  #Отправляет результат выдачи IP после ответа на запрос(или паралельно с ответом на запрос)
+  postauth:
     enabled: true
-    disable_timeout: 60s # На это время API-адрес будет исключен из списка
+    addresses:
+     - http://apiv2.loc/v2/trusted/equipment/radius-post-auth
 
   timeout: 3s # Максимальное время ответа API
-  # Настройки кеширования
-  # Кеширование используется для уменьшения количества запросов к API.
-  # Так же, если установить expire_timeout на много больше actualize_timeout это позволит хранить ответы с АПИ в памяти радиуса
-  # и в случае отказа АПИ будут использоваться данные из него.
-  #
-  # Стоит учитывать что actualize_time не может быть больше lease_time_sec. Если подобное случается, устанавливается время лиза
-  caching:
-    actualize_timeout: 1m # Как часто нужно актуализироовать данные с API, даже если они есть в кеше
-    enabled: true
-    expire_timeout: 60m
