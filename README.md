@@ -11,11 +11,11 @@
 
 #### ***Radius***     
 * Чтение и передача в API следующих параметров: 
-   * NAS-Identifier 
-   * NAS-IP-Address    
-   * User-Name   
+   * NAS-Identifier - Имя микротика    
+   * NAS-IP-Address  - IP микротика    
+   * User-Name - Мак-адрес пользователя    
    * Calling-Station-Id    
-   * Called-Station-Name
+   * Called-Station-Id - Имя dhcp-сервера    
    * Agent-Remote-Id   
    * Agent-Circuit-Id    
 * Парсинг Circuit-Id, Remote-Id (option82) и передача на апи 
@@ -74,8 +74,8 @@
     }
 }
 ```
-**Ответ от API должен быть в следующем формате**
-* Выдача пула с таймаутом лиза 2 минуты
+**Ответ от API должен быть в следующем формате**    
+* Выдача пула с таймаутом лиза 2 минуты     
 ``` 
 {
     "statusCode": 200,
@@ -84,8 +84,8 @@
         "lease_time_sec": 120
     }
 }
-```
-* Выдача IP-адреса с таймаутом лиза на 1ч 
+```    
+* Выдача IP-адреса с таймаутом лиза на 1ч     
 ``` 
 {
     "statusCode": 200,
@@ -94,14 +94,35 @@
         "lease_time_sec": 3600
     }
 }
+```     
+
+## Работа с API (PostAuth)     
+**Сервер отправляет POST-запрос с Content-Type: application/json.**    
+Пример запроса сервера:    
+```
+{
+    "request": {
+         "nas_ip": "<nil>",
+         "nas_name": "", 
+         "device_mac": "AA:BB:CC:DD:EE:FF",
+         "dhcp_server_name":"vlan1244", "dhcp_server_id": "",
+         "agent":null
+    },
+    "response": {
+         "ip_address": "", 
+         "pool_name": "vlan1244", 
+         "lease_time_sec": 120,
+         "status": "ACCEPT",
+         "error":""
+    }
+}
 ```   
+Радиус не анализирует ответ от API    
 
-## Работа с API (PostAuth)   
-**Сервер отправляет POST-запрос с Content-Type: application/json.**
 
-### Как запустить    
-1. Можно использовать докер (описание находится в ./install/docker)
-2. Скачать бинарник с релизов и пример конфига. Можно запустить руками или же добавить в sysctl (описание находится в ./install/deamon)
+### Как запустить       
+1. Можно использовать докер (описание находится в ./install/docker)    
+2. Скачать бинарник с релизов и пример конфига. Можно запустить руками или же добавить в sysctl (описание находится в ./install/deamon)     
 
  
 ### Пример настройки микротика для опции82 или без нее 

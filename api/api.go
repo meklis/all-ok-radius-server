@@ -32,12 +32,13 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 
 func (a *Api) Get(req *events.Request) (*events.Response, error) {
 	hash := req.GetHash()
+	response := new(events.Response)
 	response, exist := a.cache.Get(hash)
 	if exist {
 		a.lg.DebugF("%v found in cache, check actual time", hash)
 		if response.Time.After(time.Now()) {
 			a.lg.DebugF("%v has actual time - %v, returning from cache", hash, response.Time.String())
-			return &response, nil
+			return response, nil
 		} else {
 			a.lg.DebugF("%v must be actualized from api", hash)
 		}
@@ -48,7 +49,7 @@ func (a *Api) Get(req *events.Request) (*events.Response, error) {
 	if err != nil && exist {
 		prom.ErrorsInc(prom.Error, "api")
 		a.lg.ErrorF("error get data from api: %v", tracerr.Sprint(err))
-		return &response, nil
+		return response, nil
 	} else if err != nil {
 		return nil, tracerr.Wrap(err)
 	}

@@ -23,11 +23,12 @@ func (rad *Radius) handler(w radius.ResponseWriter, r *radius.Request) {
 		rad.lg.CriticalF("error get answer from api's: %v", err.Error())
 		rad.lg.DebugF(tracerr.Sprint(err))
 		rad._handlerWriteResponseRejected(w, r)
-		resp.Status = "REJECTED"
-		resp.Error = fmt.Sprintf("error get answer from api's: %v", err.Error())
 		rad.api.SendPostAuth(api.PostAuth{
-			Request:  req,
-			Response: *resp,
+			Request: req,
+			Response: events.Response{
+				Status: "REJECT",
+				Error:  fmt.Sprintf("%v", err),
+			},
 		})
 		return
 	} else if resp.IpAddress == "" && resp.PoolName == "" {
@@ -74,7 +75,7 @@ func (rad *Radius) handler(w radius.ResponseWriter, r *radius.Request) {
 func (rad *Radius) _handlerProccessApi(request events.Request) (*events.Response, error) {
 	resp, err := rad.api.Get(&request)
 	if err != nil {
-		return resp, tracerr.Wrap(err)
+		return nil, tracerr.Wrap(err)
 	}
 	return resp, nil
 }
@@ -88,18 +89,17 @@ func (rad *Radius) _handlerReadRequest(r *radius.Request) (events.Request, error
 
 	rad.lg.DebugF("%v %x: nasName=%v, nasIpAddr=%v, deviceMac=%v, dhcpServerName=%v, dhcpServerId=%v", r.Code.String(), r.Authenticator, nasName, nasIpAddr, deviceMAC, dhcpServerName, dhcpServerId)
 	agent := new(events.RequestAgent)
-	if rad.agentParsing {
-		remoteId := redback_agent_parsers.ParseRemoteId(redback.AgentRemoteID_Get(r.Packet))
-		if remoteId == "" {
-			prom.ErrorsInc(prom.Warning, "radius")
-			rad.lg.WarningF("%v %x: no agent information in request (deviceMac=%v, nasIp=%v, dhcpServerName=%v)", r.Code.String(), r.Authenticator, deviceMAC, nasIpAddr, dhcpServerName)
-			agent = nil
-		} else {
-			agent.RemoteId = remoteId
-
-			rad.lg.DebugF("%v %x: agentRemoteId=%v", r.Code.String(), r.Authenticator, agent.RemoteId)
-			if bts := redback.AgentCircuitID_Get(r.Packet); len(bts) > 2 {
-				agent.RawCircuitId = fmt.Sprintf("%X", bts[2:])
+	remoteId := redback_agent_parsers.ParseRemoteId(redback.AgentRemoteID_Get(r.Packet))
+	if remoteId == "" && rad.agentParsing {
+		prom.ErrorsInc(prom.Warning, "radius")
+		rad.lg.WarningF("%v %x: no agent information in request (deviceMac=%v, nasIp=%v, dhcpServerName=%v)", r.Code.String(), r.Authenticator, deviceMAC, nasIpAddr, dhcpServerName)
+		agent = nil
+	} else {
+		agent.RemoteId = remoteId
+		rad.lg.DebugF("%v %x: agentRemoteId=%v", r.Code.String(), r.Authenticator, agent.RemoteId)
+		if bts := redback.AgentCircuitID_Get(r.Packet); len(bts) > 2 {
+			agent.RawCircuitId = fmt.Sprintf("%X", bts[2:])
+			if rad.agentParsing {
 				circuit, er := redback_agent_parsers.Parse(bts)
 				if er != nil {
 					prom.ErrorsInc(prom.Error, "radius")
@@ -110,10 +110,7 @@ func (rad *Radius) _handlerReadRequest(r *radius.Request) (events.Request, error
 					agent.Circuit = circuit
 				}
 			}
-			agent.RemoteId = remoteId
 		}
-	} else {
-		agent = nil
 	}
 	request := events.Request{
 		NasIp:          nasIpAddr,
