@@ -17,14 +17,12 @@ prometheus:
 
 #Конфигурация радиус-сервера
 radius:
-  listen_addr: ${LISTEN_ADDR}
-# Такие параметры как secret можно вынести в переменные окружения. Для этого вместо значения secret необходимо указать ${RADIUS_SECRET}
-# где RADIUS_SECRET - переменная окружения
+  listen_addr: ${RADIUS_LISTEN_ADDR}
+  # Такие параметры как secret можно вынести в переменные окружения. Для этого вместо значения secret необходимо указать ${RADIUS_SECRET}
+  # где RADIUS_SECRET - переменная окружения
   secret: ${SECRET}
-#Нужно ли проверять и формировать запрос с Agent-Сircuit-Id, Agent-Remote-Id.
-  agent_parsing_enabled: true
-
-
+  #Нужно ли проверять и формировать запрос с Agent-Сircuit-Id, Agent-Remote-Id.
+  agent_parsing_enabled: false
 
 #Конфигурирование работы API.
 api:
@@ -34,13 +32,12 @@ api:
       enabled: true
       expire_timeout: 60m
     alive_checking:
-      enabled: true
-      disable_timeout: 60s # На это время API-адрес будет исключен из списка
+      enabled: false
+      disable_timeout: 5s # На это время API-адрес будет исключен из списка
     addresses:
-     - ${API_ADDR}
+      - ${API_ADDR}/radius-request
   timeout: 3s # Максимальное время ответа API
   postauth:
     enabled: true
     addresses:
-      - http://apiv2.loc/v2/trusted/equipment/radius-post-auth
-
+      - ${API_ADDR}/radius-post-auth
