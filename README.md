@@ -128,6 +128,5 @@
 ### Интеграции c биллингами
 * NoDeny - https://github.com/meklis/all-ok-radius-nodeny-lib   
 * AllOkBilling   
- 
 ### Пример настройки микротика для опции82 или без нее 
 ![Winbox screen](doc/mikrotik_screen.png)
