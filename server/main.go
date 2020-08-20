@@ -20,8 +20,8 @@ var (
 )
 
 const (
-	VERSION    = "0.1"
-	BUILD_DATE = "2020-05-19"
+	VERSION    = "0.3"
+	BUILD_DATE = "2020-08-20"
 )
 
 func init() {

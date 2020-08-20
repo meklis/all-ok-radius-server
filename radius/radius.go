@@ -1,11 +1,14 @@
 package radius
 
 import (
+	"fmt"
 	rad_api "github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/logger"
 	"layeh.com/radius"
 	"log"
 	"os"
+	"sync"
+	"time"
 )
 
 type Radius struct {
@@ -14,6 +17,8 @@ type Radius struct {
 	secret       string
 	agentParsing bool
 	api          *rad_api.Api
+	classId      int64
+	sync.Mutex
 }
 
 func Init() *Radius {
@@ -22,8 +27,17 @@ func Init() *Radius {
 	rad.secret = "secret"
 	rad.agentParsing = true
 	rad.lg, _ = logger.New("radius", 0, os.Stdout)
+	rad.classId = time.Now().Unix()
 	return rad
 }
+
+func (rad *Radius) getClassId() string {
+	rad.Lock()
+	defer rad.Unlock()
+	rad.classId = rad.classId + 1
+	return fmt.Sprintf("%0x", rad.classId)
+}
+
 func (rad *Radius) SetLogger(lg *logger.Logger) *Radius {
 	rad.lg = lg
 	return rad

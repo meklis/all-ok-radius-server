@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/imroc/req"
 	"github.com/meklis/all-ok-radius-server/api/cache"
@@ -24,15 +25,15 @@ type Api struct {
 func Init(conf ApiConfig, lg *logger.Logger) *Api {
 	api := new(Api)
 	api.Conf = conf
-	api.cache = cache.Init(conf.RadReply.Caching.TimeoutExpires)
-	api.sources = sources.New(conf.RadReply.Addresses, lg, conf.RadReply.AliveChecking.DisableTimeout)
+	api.cache = cache.Init(conf.Auth.Caching.TimeoutExpires)
+	api.sources = sources.New(conf.Auth.Addresses, lg, conf.Auth.AliveChecking.DisableTimeout)
 	api.lg = lg
 	return api
 }
 
-func (a *Api) Get(req *events.Request) (*events.Response, error) {
+func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 	hash := req.GetHash()
-	response := new(events.Response)
+	response := new(events.AuthResponse)
 	response, exist := a.cache.Get(hash)
 	if exist {
 		a.lg.DebugF("%v found in cache, check actual time", hash)
@@ -53,7 +54,7 @@ func (a *Api) Get(req *events.Request) (*events.Response, error) {
 	} else if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	actualizeTime := time.Now().Add(a.Conf.RadReply.Caching.ActualizeTimeout)
+	actualizeTime := time.Now().Add(a.Conf.Auth.Caching.ActualizeTimeout)
 	if actualizeTime.After(time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))) {
 		a.lg.Warningf("Detected lease_time_sec has a small time. Actualize time will be set as lease time")
 		actualizeTime = time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))
@@ -83,7 +84,30 @@ func (a *Api) SendPostAuth(auth PostAuth) {
 	}()
 }
 
-func (a *Api) _getFromApi(request *events.Request) (*events.Response, error) {
+func (a *Api) SendAcct(acct events.AcctRequest) {
+	if !a.Conf.Acct.Enabled {
+		return
+	}
+	go func() {
+		for _, addr := range a.Conf.Acct.Addresses {
+			b, _ := json.Marshal(&acct)
+			fmt.Println(string(b))
+			response, err := req.Post(addr, req.BodyJSON(&acct))
+			if err != nil {
+				prom.ErrorsInc(prom.Error, "api")
+				a.lg.ErrorF("Acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+				continue
+			}
+			if response.Response().StatusCode != 200 {
+				prom.ErrorsInc(prom.Error, "api")
+				a.lg.ErrorF("Acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+				continue
+			}
+		}
+	}()
+}
+
+func (a *Api) _getFromApi(request *events.AuthRequest) (*events.AuthResponse, error) {
 	source, err := a.sources.GetSource()
 	if err != nil {
 		a.lg.DebugF("not found sources - %v", err.Error())

@@ -6,7 +6,7 @@ import (
 )
 
 type ApiConfig struct {
-	RadReply struct {
+	Auth struct {
 		Addresses     []string `yaml:"addresses"`
 		AliveChecking struct {
 			Enabled        bool          `yaml:"enabled"`
@@ -17,21 +17,25 @@ type ApiConfig struct {
 			ActualizeTimeout time.Duration `yaml:"actualize_timeout"`
 			TimeoutExpires   time.Duration `yaml:"expire_timeout"`
 		} `yaml:"caching"`
-	} `yaml:"radreply"`
+	} `yaml:"auth"`
 	PostAuth struct {
 		Enabled   bool     `yaml:"enabled"`
 		Addresses []string `yaml:"addresses"`
 	} `yaml:"postauth"`
+	Acct struct {
+		Enabled   bool     `yaml:"enabled"`
+		Addresses []string `yaml:"addresses"`
+	} `yaml:"acct"`
 	Timeout time.Duration `yaml:"timeout"`
 }
 
 type ApiResponse struct {
-	Data       events.Response `json:"data"`
-	Meta       interface{}     `json:"meta"`
-	StatusCode int             `json:"statusCode"`
+	Data       events.AuthResponse `json:"data"`
+	Meta       interface{}         `json:"meta"`
+	StatusCode int                 `json:"statusCode"`
 }
 
 type PostAuth struct {
-	Request  events.Request  `json:"request"`
-	Response events.Response `json:"response"`
+	Request  events.AuthRequest  `json:"request"`
+	Response events.AuthResponse `json:"response"`
 }
