@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/prom"
 	"github.com/meklis/all-ok-radius-server/radius/events"
 	"github.com/meklis/all-ok-radius-server/redback"
@@ -40,6 +41,14 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.Criticalf("response from radius-server: %v", err.Error())
 		rad._respondAuthReject(w, r, classId)
+		rad.api.SendPostAuth(api.PostAuth{
+			Request: req,
+			Response: events.AuthResponse{
+				Status: "REJECT",
+				Error:  fmt.Sprintf("%v", err),
+				Class:  classId,
+			},
+		})
 		return
 	}
 	req.Class = classId
@@ -49,29 +58,71 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 		rad.lg.CriticalF("error get answer from api's: %v", err.Error())
 		rad.lg.DebugF(tracerr.Sprint(err))
 		rad._respondAuthReject(w, r, classId)
+		rad.api.SendPostAuth(api.PostAuth{
+			Request: req,
+			Response: events.AuthResponse{
+				Status: "REJECT",
+				Error:  fmt.Sprintf("%v", err),
+				Class:  classId,
+			},
+		})
 		return
 	} else if resp.IpAddress == "" && resp.PoolName == "" {
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error get answer from api's: pool_name and ip_address is empty")
 		rad._respondAuthReject(w, r, classId)
+		rad.api.SendPostAuth(api.PostAuth{
+			Request: req,
+			Response: events.AuthResponse{
+				Status: "REJECT",
+				Error:  fmt.Sprintf("error get answer from api's: pool_name and ip_address is empty"),
+				Class:  classId,
+			},
+		})
 		return
 	}
 	prom.RadRequestsInc(req.NasIp)
 	if resp.PoolName != "" {
 		prom.RadRequestsPoolInc(req.NasIp)
+		prom.RadRequestsByPoolInc(req.NasIp, resp.PoolName)
+		prom.RadDetailedRequest(req.NasIp, req.DhcpServerName, req.DeviceMac, "pool")
 	}
 	if resp.IpAddress != "" {
 		prom.RadRequestsIpAddressInc(req.NasIp)
+		prom.RadDetailedRequest(req.NasIp, req.DhcpServerName, req.DeviceMac, "ip")
 	}
+
 	resp.Class = classId
 	rad.lg.DebugF("%v %x: response from api - poolName=%v ipAddr=%v leaseTimeSec=%v", r.Code, r.Authenticator, resp.PoolName, resp.IpAddress, resp.LeaseTimeSec)
 	err = rad._respondAuthAccept(*resp, w, r)
+
 	if err != nil {
 		rad._respondAuthReject(w, r, classId)
+		rad.api.SendPostAuth(api.PostAuth{
+			Request: req,
+			Response: events.AuthResponse{
+				Status: "REJECT",
+				Error:  fmt.Sprintf("%v", err),
+				Class:  classId,
+			},
+		})
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error write response: %v", err.Error())
 		rad.lg.DebugF(tracerr.Sprint(err))
 		return
+	} else {
+		rad.api.SendPostAuth(api.PostAuth{
+			Request: req,
+			Response: events.AuthResponse{
+				Time:         resp.Time,
+				IpAddress:    resp.IpAddress,
+				PoolName:     resp.PoolName,
+				LeaseTimeSec: resp.LeaseTimeSec,
+				Status:       "ACCEPT",
+				Error:        "",
+				Class:        resp.Class,
+			},
+		})
 	}
 }
 func (rad *Radius) _parseAuthRequest(r *radius.Request) (events.AuthRequest, error) {
@@ -118,6 +169,8 @@ func (rad *Radius) _parseAuthRequest(r *radius.Request) (events.AuthRequest, err
 
 func (rad *Radius) _handleAccountingRequest(w radius.ResponseWriter, r *radius.Request) {
 	req, _ := rad._parseAccountingRequest(r)
+	prom.RadAcctRequestsInc(req.NasIp, req.DhcpServerName)
+
 	rad.api.SendAcct(req)
 	r.Code = radius.CodeAccountingResponse
 	w.Write(r.Packet)
@@ -183,7 +236,7 @@ func (rad *Radius) _respondAuthAccept(response events.AuthResponse, w radius.Res
 	default:
 		rad.lg.ErrorF("unknown type of response set with id: %v", response.GetRadiusResponseType())
 		prom.ErrorsInc(prom.Error, "radius")
-		return errors.New(fmt.Sprint("unknown type of response set with id: %v", response.GetRadiusResponseType()))
+		return errors.New(fmt.Sprintf("unknown type of response set with id: %v", response.GetRadiusResponseType()))
 	}
 
 	if response.LeaseTimeSec != 0 {

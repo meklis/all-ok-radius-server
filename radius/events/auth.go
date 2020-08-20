@@ -28,6 +28,7 @@ type AuthRequestAgent struct {
 
 func (r *AuthRequest) GetHash() string {
 	arrBytes := []byte{}
+	r.Class = ""
 	jsonBytes, _ := json.Marshal(r)
 	arrBytes = append(arrBytes, jsonBytes...)
 	return fmt.Sprintf("%x", md5.Sum(arrBytes))
