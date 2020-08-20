@@ -42,6 +42,7 @@ func main() {
 	//Initialize prometheus
 	if Config.Prometheus.Enabled {
 		prom.PromEnabled = true
+		prom.PromDetailedMacInfoEnabled = Config.Prometheus.Detailed
 		lg.NoticeF("Exporter for prometheus is enabled...")
 		http.Handle(Config.Prometheus.Path, promhttp.Handler())
 		go func() {

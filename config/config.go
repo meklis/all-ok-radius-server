@@ -27,6 +27,7 @@ type Configuration struct {
 		RecalcEstabConnsTimeout time.Duration     `yaml:"recalc_estab_timeout"`
 		LiveRecalc              bool              `yaml:"live_recalc"`
 		Labels                  map[string]string `yaml:"static_labels"`
+		Detailed                bool              `yaml:"detailed"`
 	} `yaml:"prometheus"`
 	Radius struct {
 		ListenAddr          string `yaml:"listen_addr"`
