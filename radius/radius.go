@@ -35,7 +35,7 @@ func (rad *Radius) getClassId() string {
 	rad.Lock()
 	defer rad.Unlock()
 	rad.classId = rad.classId + 1
-	return fmt.Sprintf("%0x", rad.classId)
+	return fmt.Sprintf("%v", rad.classId)
 }
 
 func (rad *Radius) SetLogger(lg *logger.Logger) *Radius {

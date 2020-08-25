@@ -216,7 +216,7 @@ func (rad *Radius) _parseAccountingRequest(r *radius.Request) (events.AcctReques
 func (rad *Radius) _respondAuthAccept(response events.AuthResponse, w radius.ResponseWriter, r *radius.Request) error {
 	r.Attributes = make(radius.Attributes)
 	if response.Class != "" {
-		if err := rfc2865.Class_Set(r.Packet, []byte(response.Class)); err != nil {
+		if err := rfc2865.Class_SetString(r.Packet, response.Class); err != nil {
 			prom.ErrorsInc(prom.Error, "radius")
 			rad.lg.ErrorF("error generate response packet for pool with className=%v", response.Class)
 		}
