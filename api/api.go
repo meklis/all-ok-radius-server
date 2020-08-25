@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/imroc/req"
 	"github.com/meklis/all-ok-radius-server/api/cache"
@@ -90,8 +89,6 @@ func (a *Api) SendAcct(acct events.AcctRequest) {
 	}
 	go func() {
 		for _, addr := range a.Conf.Acct.Addresses {
-			b, _ := json.Marshal(&acct)
-			fmt.Println(string(b))
 			response, err := req.Post(addr, req.BodyJSON(&acct))
 			if err != nil {
 				prom.ErrorsInc(prom.Error, "api")
