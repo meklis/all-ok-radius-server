@@ -182,7 +182,7 @@ func (rad *Radius) _parseAccountingRequest(r *radius.Request) (events.AcctReques
 	deviceMAC := rfc2865.UserName_GetString(r.Packet)
 	dhcpServerName := rfc2865.CalledStationID_GetString(r.Packet)
 	dhcpServerId := rfc2865.CallingStationID_GetString(r.Packet)
-	ipAddr := rfc2869.FramedPool_GetString(r.Packet)
+	ipAddr := rfc2865.FramedIPAddress_Get(r.Packet)
 	classId := rfc2865.Class_GetString(r.Packet)
 	poolName := rfc2869.FramedPool_GetString(r.Packet)
 	authenticType := rfc2866.AcctAuthentic_Strings[rfc2866.AcctAuthentic_Get(r.Packet)]
@@ -198,7 +198,7 @@ func (rad *Radius) _parseAccountingRequest(r *radius.Request) (events.AcctReques
 		DeviceMac:       deviceMAC,
 		DhcpServerName:  dhcpServerName,
 		DhcpServerId:    dhcpServerId,
-		FramedIpAddress: ipAddr,
+		FramedIpAddress: ipAddr.String(),
 		AuthType:        authenticType,
 		Class:           classId,
 		StatusType:      statusType,
