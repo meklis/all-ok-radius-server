@@ -20,8 +20,8 @@ var (
 )
 
 const (
-	VERSION    = "0.3"
-	BUILD_DATE = "2020-08-20"
+	VERSION    = "0.2.2"
+	BUILD_DATE = "2020-08-25"
 )
 
 func init() {
@@ -30,7 +30,7 @@ func init() {
 }
 
 func main() {
-	fmt.Println("Initialize radius-server v0.1 ...")
+	fmt.Println("Initialize radius-server  ...")
 
 	//Load configuration
 	if err := config.LoadConfig(pathConfig, &Config); err != nil {
