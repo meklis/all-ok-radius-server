@@ -1,7 +1,6 @@
 package api
 
 import (
-	"crypto/tls"
 	"fmt"
 	"github.com/imroc/req"
 	"github.com/meklis/all-ok-radius-server/api/cache"
@@ -10,8 +9,6 @@ import (
 	"github.com/meklis/all-ok-radius-server/prom"
 	"github.com/meklis/all-ok-radius-server/radius/events"
 	"github.com/ztrue/tracerr"
-	"net/http"
-	"net/http/cookiejar"
 	"sync"
 	"time"
 )
@@ -25,13 +22,6 @@ type Api struct {
 }
 
 func Init(conf ApiConfig, lg *logger.Logger) *Api {
-	req.Client().Jar, _ = cookiejar.New(nil)
-	trans, _ := req.Client().Transport.(*http.Transport)
-	trans.MaxIdleConns = 20
-	trans.TLSHandshakeTimeout = 20 * time.Second
-	trans.DisableKeepAlives = true
-	trans.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-
 	api := new(Api)
 	api.Conf = conf
 	api.cache = cache.Init(conf.Auth.Caching.TimeoutExpires)
@@ -99,7 +89,7 @@ func (a *Api) SendAcct(acct events.AcctRequest) {
 	}
 	go func() {
 		for _, addr := range a.Conf.Acct.Addresses {
-			response, err := req.Post(addr, req.BodyJSON(acct))
+			response, err := req.Post(addr, req.BodyJSON(&acct))
 			if err != nil {
 				prom.ErrorsInc(prom.Error, "api")
 				a.lg.ErrorF("Acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
