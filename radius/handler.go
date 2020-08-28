@@ -27,10 +27,10 @@ func (rad *Radius) handler(w radius.ResponseWriter, r *radius.Request) {
 	}
 }
 
-func (rad *Radius) _handlerProccessApi(request events.AuthRequest) (*events.AuthResponse, error) {
-	resp, err := rad.api.Get(&request)
+func (rad *Radius) _handlerProccessApi(request events.AuthRequest) (events.AuthResponse, error) {
+	resp, err := rad.api.Get(request)
 	if err != nil {
-		return nil, tracerr.Wrap(err)
+		return events.AuthResponse{}, tracerr.Wrap(err)
 	}
 	return resp, nil
 }
@@ -94,7 +94,7 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 
 	resp.Class = classId
 	rad.lg.DebugF("%v %x: response from api - poolName=%v ipAddr=%v leaseTimeSec=%v", r.Code, r.Authenticator, resp.PoolName, resp.IpAddress, resp.LeaseTimeSec)
-	err = rad._respondAuthAccept(*resp, w, r)
+	err = rad._respondAuthAccept(resp, w, r)
 
 	if err != nil {
 		rad._respondAuthReject(w, r, classId)

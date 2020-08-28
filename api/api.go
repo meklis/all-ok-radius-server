@@ -28,7 +28,7 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 	req.Client().Jar, _ = cookiejar.New(nil)
 	trans, _ := req.Client().Transport.(*http.Transport)
 	trans.MaxIdleConns = 20
-	trans.TLSHandshakeTimeout = 20 * time.Second
+	trans.TLSHandshakeTimeout = 10 * time.Second
 	trans.DisableKeepAlives = true
 	trans.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
@@ -40,9 +40,9 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 	return api
 }
 
-func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
+func (a *Api) Get(req events.AuthRequest) (events.AuthResponse, error) {
 	hash := req.GetHash()
-	response := new(events.AuthResponse)
+	response := events.AuthResponse{}
 	response, exist := a.cache.Get(hash)
 	if exist {
 		a.lg.DebugF("%v found in cache, check actual time", hash)
@@ -61,7 +61,7 @@ func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 		a.lg.ErrorF("error get data from api: %v", tracerr.Sprint(err))
 		return response, nil
 	} else if err != nil {
-		return nil, tracerr.Wrap(err)
+		return events.AuthResponse{}, tracerr.Wrap(err)
 	}
 	actualizeTime := time.Now().Add(a.Conf.Auth.Caching.ActualizeTimeout)
 	if actualizeTime.After(time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))) {
@@ -69,7 +69,7 @@ func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 		actualizeTime = time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))
 	}
 	apiResp.Time = actualizeTime
-	a.cache.Set(hash, *apiResp)
+	a.cache.Set(hash, apiResp)
 	return apiResp, nil
 }
 func (a *Api) SendPostAuth(auth PostAuth) {
@@ -78,7 +78,7 @@ func (a *Api) SendPostAuth(auth PostAuth) {
 	}
 	go func() {
 		for _, addr := range a.Conf.PostAuth.Addresses {
-			response, err := req.Post(addr, req.BodyJSON(auth))
+			response, err := req.Post(addr, req.BodyJSON(&auth))
 			if err != nil {
 				prom.ErrorsInc(prom.Error, "api")
 				a.lg.ErrorF("Post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
@@ -99,7 +99,7 @@ func (a *Api) SendAcct(acct events.AcctRequest) {
 	}
 	go func() {
 		for _, addr := range a.Conf.Acct.Addresses {
-			response, err := req.Post(addr, req.BodyJSON(acct))
+			response, err := req.Post(addr, req.BodyJSON(&acct))
 			if err != nil {
 				prom.ErrorsInc(prom.Error, "api")
 				a.lg.ErrorF("Acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
@@ -114,11 +114,11 @@ func (a *Api) SendAcct(acct events.AcctRequest) {
 	}()
 }
 
-func (a *Api) _getFromApi(request *events.AuthRequest) (*events.AuthResponse, error) {
+func (a *Api) _getFromApi(request events.AuthRequest) (events.AuthResponse, error) {
 	source, err := a.sources.GetSource()
 	if err != nil {
 		a.lg.DebugF("not found sources - %v", err.Error())
-		return nil, tracerr.Wrap(err)
+		return events.AuthResponse{}, tracerr.Wrap(err)
 	}
 	a.lg.DebugF("defined source from rr = %v", source)
 	a.sources.IncRequests(source.Address)
@@ -128,22 +128,22 @@ func (a *Api) _getFromApi(request *events.AuthRequest) (*events.AuthResponse, er
 		prom.ErrorsInc(prom.Error, "api")
 		a.lg.ErrorF("source returned err: %v", tracerr.Sprint(err))
 		a.sources.Disable(source.Address)
-		return nil, tracerr.Wrap(err)
+		return events.AuthResponse{}, tracerr.Wrap(err)
 	}
 	if response.Response().StatusCode != 200 {
 		prom.ErrorsInc(prom.Error, "api")
 		a.lg.ErrorF("source returned http != 200: %v %v", response.Response().StatusCode, response.Response().Status)
 		a.sources.Disable(source.Address)
-		return nil, tracerr.New(fmt.Sprintf("http err: %v - %v", response.Response().StatusCode, response.Response().Status))
+		return events.AuthResponse{}, tracerr.New(fmt.Sprintf("http err: %v - %v", response.Response().StatusCode, response.Response().Status))
 	}
 	apiResp := ApiResponse{}
 	if err := response.ToJSON(&apiResp); err != nil {
 		a.sources.Disable(source.Address)
-		return nil, tracerr.Wrap(err)
+		return events.AuthResponse{}, tracerr.Wrap(err)
 	}
 
 	if apiResp.StatusCode != 200 {
-		return nil, tracerr.New(fmt.Sprintf("api returned status code - %v. must be 200", apiResp.StatusCode))
+		return events.AuthResponse{}, tracerr.New(fmt.Sprintf("api returned status code - %v. must be 200", apiResp.StatusCode))
 	}
-	return &apiResp.Data, nil
+	return apiResp.Data, nil
 }
