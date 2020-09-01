@@ -51,11 +51,13 @@ api:
       - http://apiv2.golden.net.ua/v2/trusted/equipment/radius/request
   acct:
     enabled: true
+    count_readers: 5
     addresses:
       - http://apiv2.golden.net.ua/v2/trusted/equipment/radius/acct
   #Отправляет результат выдачи IP после ответа на запрос(или паралельно с ответом на запрос)
   postauth:
     enabled: false
+    count_readers: 5
     addresses:
      - http://apiv2.golden.net.ua/v2/trusted/equipment/radius
 

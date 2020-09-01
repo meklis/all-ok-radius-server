@@ -19,12 +19,14 @@ type ApiConfig struct {
 		} `yaml:"caching"`
 	} `yaml:"auth"`
 	PostAuth struct {
-		Enabled   bool     `yaml:"enabled"`
-		Addresses []string `yaml:"addresses"`
+		Enabled      bool     `yaml:"enabled"`
+		CountReaders int      `yaml:"count_readers"`
+		Addresses    []string `yaml:"addresses"`
 	} `yaml:"postauth"`
 	Acct struct {
-		Enabled   bool     `yaml:"enabled"`
-		Addresses []string `yaml:"addresses"`
+		Enabled      bool     `yaml:"enabled"`
+		CountReaders int      `yaml:"count_readers"`
+		Addresses    []string `yaml:"addresses"`
 	} `yaml:"acct"`
 	Timeout time.Duration `yaml:"timeout"`
 }
