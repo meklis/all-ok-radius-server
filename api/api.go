@@ -18,10 +18,12 @@ import (
 
 type Api struct {
 	sync.Mutex
-	Conf    ApiConfig
-	cache   *cache.CacheApi
-	sources *sources.Sources
-	lg      *logger.Logger
+	Conf            ApiConfig
+	cache           *cache.CacheApi
+	sources         *sources.Sources
+	lg              *logger.Logger
+	postAuthChannel chan PostAuth
+	acctChannel     chan events.AcctRequest
 }
 
 func Init(conf ApiConfig, lg *logger.Logger) *Api {
@@ -37,6 +39,75 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 	api.cache = cache.Init(conf.Auth.Caching.TimeoutExpires)
 	api.sources = sources.New(conf.Auth.Addresses, lg, conf.Auth.AliveChecking.DisableTimeout)
 	api.lg = lg
+
+	//Post auth reader
+	if conf.PostAuth.Enabled {
+		api.postAuthChannel = make(chan PostAuth, 100)
+		lg.NoticeF("start postAuth readers")
+		for i := 0; i < conf.PostAuth.CountReaders; i++ {
+			go func() {
+				for {
+					auth := <-api.postAuthChannel
+					for _, addr := range conf.PostAuth.Addresses {
+						response, err := req.Post(addr, req.BodyJSON(&auth))
+						if err != nil {
+							prom.ErrorsInc(prom.Error, "api")
+							lg.ErrorF("post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+							continue
+						}
+						if response.Response().StatusCode != 200 {
+							prom.ErrorsInc(prom.Error, "api")
+							lg.ErrorF("post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+							continue
+						}
+					}
+				}
+			}()
+		}
+		go func() {
+			for {
+				time.Sleep(time.Second)
+				prom.SetPostAuthQueueSize(len(api.postAuthChannel))
+			}
+		}()
+	} else {
+		lg.NoticeF("postAuth disabled")
+	}
+
+	//Init acct readers
+	if conf.Acct.Enabled {
+		api.acctChannel = make(chan events.AcctRequest, 100)
+		lg.NoticeF("start acct readers")
+		for i := 0; i < conf.Acct.CountReaders; i++ {
+			go func() {
+				for {
+					acct := <-api.acctChannel
+					for _, addr := range conf.Acct.Addresses {
+						response, err := req.Post(addr, req.BodyJSON(&acct))
+						if err != nil {
+							prom.ErrorsInc(prom.Error, "api")
+							lg.ErrorF("acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+							continue
+						}
+						if response.Response().StatusCode != 200 {
+							prom.ErrorsInc(prom.Error, "api")
+							lg.ErrorF("acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+							continue
+						}
+					}
+				}
+			}()
+		}
+		go func() {
+			for {
+				time.Sleep(time.Second)
+				prom.SetAcctQueueSize(len(api.acctChannel))
+			}
+		}()
+	} else {
+		lg.NoticeF("acct request disabled")
+	}
+
 	return api
 }
 
@@ -65,7 +136,7 @@ func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 	}
 	actualizeTime := time.Now().Add(a.Conf.Auth.Caching.ActualizeTimeout)
 	if actualizeTime.After(time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))) {
-		a.lg.Warningf("Detected lease_time_sec has a small time. Actualize time will be set as lease time")
+		a.lg.Warningf("detected lease_time_sec has a small time. Actualize time will be set as lease time")
 		actualizeTime = time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))
 	}
 	apiResp.Time = actualizeTime
@@ -76,42 +147,24 @@ func (a *Api) SendPostAuth(auth PostAuth) {
 	if !a.Conf.PostAuth.Enabled {
 		return
 	}
-	go func() {
-		for _, addr := range a.Conf.PostAuth.Addresses {
-			response, err := req.Post(addr, req.BodyJSON(auth))
-			if err != nil {
-				prom.ErrorsInc(prom.Error, "api")
-				a.lg.ErrorF("Post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
-				continue
-			}
-			if response.Response().StatusCode != 200 {
-				prom.ErrorsInc(prom.Error, "api")
-				a.lg.ErrorF("Post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
-				continue
-			}
-		}
-	}()
+	select {
+	case a.postAuthChannel <- auth:
+	default:
+		a.lg.WarningF("post auth channel is full! Try to increase reader count")
+		a.lg.DebugF("request %v-%v-%v will be dropped", auth.Request.NasIp, auth.Request.DeviceMac, auth.Request.DhcpServerName)
+	}
 }
 
 func (a *Api) SendAcct(acct events.AcctRequest) {
 	if !a.Conf.Acct.Enabled {
 		return
 	}
-	go func() {
-		for _, addr := range a.Conf.Acct.Addresses {
-			response, err := req.Post(addr, req.BodyJSON(&acct))
-			if err != nil {
-				prom.ErrorsInc(prom.Error, "api")
-				a.lg.ErrorF("Acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
-				continue
-			}
-			if response.Response().StatusCode != 200 {
-				prom.ErrorsInc(prom.Error, "api")
-				a.lg.ErrorF("Acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
-				continue
-			}
-		}
-	}()
+	select {
+	case a.acctChannel <- acct:
+	default:
+		a.lg.WarningF("acct channel is full! Try to increase reader count")
+		a.lg.DebugF("acct %v-%v-%v with ip %v will be dropped ", acct.NasIp, acct.DeviceMac, acct.DhcpServerName, acct.FramedIpAddress)
+	}
 }
 
 func (a *Api) _getFromApi(request *events.AuthRequest) (*events.AuthResponse, error) {

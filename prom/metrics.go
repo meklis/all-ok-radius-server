@@ -46,6 +46,14 @@ var (
 		Name: "rad_api_alive_status",
 		Help: "API alive status",
 	}, []string{"api_addr"})
+	apiPostAuthQueueLen = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "rad_api_post_auth_queue_len",
+		Help: "Queue len for post auth",
+	}, []string{})
+	apiAcctQueueLen = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "rad_api_acct_queue_len",
+		Help: "Queue len for acct",
+	}, []string{})
 	promSysInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "rad_sys_version",
 		Help: "Version of radius-server",
@@ -128,6 +136,18 @@ func SetCacheSize(size int) {
 		return
 	}
 	cacheSize.With(map[string]string{}).Set(float64(size))
+}
+func SetPostAuthQueueSize(size int) {
+	if !PromEnabled {
+		return
+	}
+	apiPostAuthQueueLen.With(map[string]string{}).Set(float64(size))
+}
+func SetAcctQueueSize(size int) {
+	if !PromEnabled {
+		return
+	}
+	apiAcctQueueLen.With(map[string]string{}).Set(float64(size))
 }
 
 func SetApiStatus(address string, alive bool) {
