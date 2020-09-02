@@ -38,6 +38,13 @@ type ApiResponse struct {
 }
 
 type PostAuth struct {
-	Request  *events.AuthRequest  `json:"request"`
-	Response *events.AuthResponse `json:"response"`
+	Request  events.AuthRequest  `json:"request"`
+	Response events.AuthResponse `json:"response"`
+}
+
+func InitPostAuth(req events.AuthRequest, resp events.AuthResponse) *PostAuth {
+	p := new(PostAuth)
+	p.Request = req
+	p.Response = resp
+	return p
 }
