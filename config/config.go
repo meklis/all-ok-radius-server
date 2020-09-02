@@ -35,6 +35,12 @@ type Configuration struct {
 		AgentParsingEnabled bool   `yaml:"agent_parsing_enabled"`
 	} `yaml:"radius"`
 	Api api.ApiConfig `yaml:"api"`
+
+	Profiler struct {
+		Port    int    `yaml:"port"`
+		Path    string `yaml:"path"`
+		Enabled bool   `yaml:"enabled"`
+	} `yaml:"profiler"`
 }
 
 func LoadConfig(path string, Config *Configuration) error {

@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ztrue/tracerr"
 	"net/http"
+	"net/http/pprof"
 )
 
 var (
@@ -53,7 +54,23 @@ func main() {
 		lg.NoticeF("Prometheus exporter started on 0.0.0.0:%v%v", Config.Prometheus.Port, Config.Prometheus.Path)
 		prom.SysInfo(VERSION, BUILD_DATE)
 	}
-
+	//Configure pprof
+	if Config.Profiler.Enabled {
+		go func() {
+			lg.NoticeF("Profiller is enabled, try start on port :%v", Config.Profiler.Port)
+			r := http.NewServeMux()
+			// Регистрация pprof-обработчиков
+			r.HandleFunc(fmt.Sprintf("%v/", Config.Profiler.Path), pprof.Index)
+			r.HandleFunc(fmt.Sprintf("%v/cmdline", Config.Profiler.Path), pprof.Cmdline)
+			r.HandleFunc(fmt.Sprintf("%v/profile", Config.Profiler.Path), pprof.Profile)
+			r.HandleFunc(fmt.Sprintf("%v/symbol", Config.Profiler.Path), pprof.Symbol)
+			r.HandleFunc(fmt.Sprintf("%v/trace", Config.Profiler.Path), pprof.Trace)
+			r.HandleFunc(fmt.Sprintf("%v/goru", Config.Profiler.Path), pprof.Trace)
+			if err := http.ListenAndServe(fmt.Sprintf(":%v", Config.Profiler.Port), r); err != nil {
+				panic(err)
+			}
+		}()
+	}
 	//Initialize API
 	apiInstance := api.Init(Config.Api, lg)
 

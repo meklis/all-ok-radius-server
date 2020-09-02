@@ -49,7 +49,7 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 				for {
 					auth := <-api.postAuthChannel
 					for _, addr := range conf.PostAuth.Addresses {
-						response, err := req.Post(addr, req.BodyJSON(&auth))
+						response, err := req.Post(addr, req.BodyJSON(auth))
 						if err != nil {
 							prom.ErrorsInc(prom.Error, "api")
 							lg.ErrorF("post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
@@ -60,6 +60,7 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 							lg.ErrorF("post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
 							continue
 						}
+						response = nil
 					}
 				}
 			}()
@@ -83,7 +84,7 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 				for {
 					acct := <-api.acctChannel
 					for _, addr := range conf.Acct.Addresses {
-						response, err := req.Post(addr, req.BodyJSON(&acct))
+						response, err := req.Post(addr, req.BodyJSON(acct))
 						if err != nil {
 							prom.ErrorsInc(prom.Error, "api")
 							lg.ErrorF("acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
