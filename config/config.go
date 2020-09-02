@@ -37,9 +37,8 @@ type Configuration struct {
 	Api api.ApiConfig `yaml:"api"`
 
 	Profiler struct {
-		Port    int    `yaml:"port"`
-		Path    string `yaml:"path"`
-		Enabled bool   `yaml:"enabled"`
+		Port    int  `yaml:"port"`
+		Enabled bool `yaml:"enabled"`
 	} `yaml:"profiler"`
 }
 
