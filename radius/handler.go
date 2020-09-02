@@ -41,9 +41,9 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.Criticalf("response from radius-server: %v", err.Error())
 		rad._respondAuthReject(w, r, classId)
-		rad.api.SendPostAuth(api.PostAuth{
-			Request: req,
-			Response: events.AuthResponse{
+		rad.api.SendPostAuth(&api.PostAuth{
+			Request: &req,
+			Response: &events.AuthResponse{
 				Status: "REJECT",
 				Error:  fmt.Sprintf("%v", err),
 				Class:  classId,
@@ -58,9 +58,9 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 		rad.lg.CriticalF("error get answer from api's: %v", err.Error())
 		rad.lg.DebugF(tracerr.Sprint(err))
 		rad._respondAuthReject(w, r, classId)
-		rad.api.SendPostAuth(api.PostAuth{
-			Request: req,
-			Response: events.AuthResponse{
+		rad.api.SendPostAuth(&api.PostAuth{
+			Request: &req,
+			Response: &events.AuthResponse{
 				Status: "REJECT",
 				Error:  fmt.Sprintf("%v", err),
 				Class:  classId,
@@ -71,9 +71,9 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error get answer from api's: pool_name and ip_address is empty")
 		rad._respondAuthReject(w, r, classId)
-		rad.api.SendPostAuth(api.PostAuth{
-			Request: req,
-			Response: events.AuthResponse{
+		rad.api.SendPostAuth(&api.PostAuth{
+			Request: &req,
+			Response: &events.AuthResponse{
 				Status: "REJECT",
 				Error:  fmt.Sprintf("error get answer from api's: pool_name and ip_address is empty"),
 				Class:  classId,
@@ -98,9 +98,9 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 
 	if err != nil {
 		rad._respondAuthReject(w, r, classId)
-		rad.api.SendPostAuth(api.PostAuth{
-			Request: req,
-			Response: events.AuthResponse{
+		rad.api.SendPostAuth(&api.PostAuth{
+			Request: &req,
+			Response: &events.AuthResponse{
 				Status: "REJECT",
 				Error:  fmt.Sprintf("%v", err),
 				Class:  classId,
@@ -111,9 +111,9 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 		rad.lg.DebugF(tracerr.Sprint(err))
 		return
 	} else {
-		rad.api.SendPostAuth(api.PostAuth{
-			Request: req,
-			Response: events.AuthResponse{
+		rad.api.SendPostAuth(&api.PostAuth{
+			Request: &req,
+			Response: &events.AuthResponse{
 				Time:         resp.Time,
 				IpAddress:    resp.IpAddress,
 				PoolName:     resp.PoolName,
@@ -171,7 +171,7 @@ func (rad *Radius) _handleAccountingRequest(w radius.ResponseWriter, r *radius.R
 	req, _ := rad._parseAccountingRequest(r)
 	prom.RadAcctRequestsInc(req.NasIp, req.DhcpServerName)
 
-	rad.api.SendAcct(req)
+	rad.api.SendAcct(&req)
 	r.Code = radius.CodeAccountingResponse
 	w.Write(r.Packet)
 }

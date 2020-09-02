@@ -22,8 +22,8 @@ type Api struct {
 	cache           *cache.CacheApi
 	sources         *sources.Sources
 	lg              *logger.Logger
-	postAuthChannel chan PostAuth
-	acctChannel     chan events.AcctRequest
+	postAuthChannel chan *PostAuth
+	acctChannel     chan *events.AcctRequest
 }
 
 func Init(conf ApiConfig, lg *logger.Logger) *Api {
@@ -42,7 +42,7 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 
 	//Post auth reader
 	if conf.PostAuth.Enabled {
-		api.postAuthChannel = make(chan PostAuth, 100)
+		api.postAuthChannel = make(chan *PostAuth, 100)
 		lg.NoticeF("start postAuth readers")
 		for i := 0; i < conf.PostAuth.CountReaders; i++ {
 			go func() {
@@ -76,7 +76,7 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 
 	//Init acct readers
 	if conf.Acct.Enabled {
-		api.acctChannel = make(chan events.AcctRequest, 100)
+		api.acctChannel = make(chan *events.AcctRequest, 100)
 		lg.NoticeF("start acct readers")
 		for i := 0; i < conf.Acct.CountReaders; i++ {
 			go func() {
@@ -143,7 +143,7 @@ func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 	a.cache.Set(hash, *apiResp)
 	return apiResp, nil
 }
-func (a *Api) SendPostAuth(auth PostAuth) {
+func (a *Api) SendPostAuth(auth *PostAuth) {
 	if !a.Conf.PostAuth.Enabled {
 		return
 	}
@@ -155,7 +155,7 @@ func (a *Api) SendPostAuth(auth PostAuth) {
 	}
 }
 
-func (a *Api) SendAcct(acct events.AcctRequest) {
+func (a *Api) SendAcct(acct *events.AcctRequest) {
 	if !a.Conf.Acct.Enabled {
 		return
 	}
