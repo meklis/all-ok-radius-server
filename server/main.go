@@ -21,7 +21,7 @@ var (
 )
 
 const (
-	VERSION    = "0.2.7"
+	VERSION    = "0.2.8"
 	BUILD_DATE = "2020-09-02"
 )
 
