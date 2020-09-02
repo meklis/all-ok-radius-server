@@ -15,6 +15,11 @@ prometheus:
   enabled: true
   port: 2112
   detailed: true
+  #Profiler pprof. Must be disabled in production
+profiler:
+  port: 2155
+  path: /pprof
+  enabled: true
 
 #Конфигурация радиус-сервера
 radius:
