@@ -60,12 +60,11 @@ func main() {
 			lg.NoticeF("Profiller is enabled, try start on port :%v", Config.Profiler.Port)
 			r := http.NewServeMux()
 			// Регистрация pprof-обработчиков
-			r.HandleFunc(fmt.Sprintf("%v/", Config.Profiler.Path), pprof.Index)
-			r.HandleFunc(fmt.Sprintf("%v/cmdline", Config.Profiler.Path), pprof.Cmdline)
-			r.HandleFunc(fmt.Sprintf("%v/profile", Config.Profiler.Path), pprof.Profile)
-			r.HandleFunc(fmt.Sprintf("%v/symbol", Config.Profiler.Path), pprof.Symbol)
-			r.HandleFunc(fmt.Sprintf("%v/trace", Config.Profiler.Path), pprof.Trace)
-			r.HandleFunc(fmt.Sprintf("%v/goru", Config.Profiler.Path), pprof.Trace)
+			r.HandleFunc("/debug/pprof/", pprof.Index)
+			r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+			r.HandleFunc("/debug/pprof/profile", pprof.Profile)
+			r.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+			r.HandleFunc("/debug/pprof/trace", pprof.Trace)
 			if err := http.ListenAndServe(fmt.Sprintf(":%v", Config.Profiler.Port), r); err != nil {
 				panic(err)
 			}
