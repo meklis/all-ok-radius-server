@@ -115,15 +115,20 @@ func Init(conf ApiConfig, lg *logger.Logger) *Api {
 func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 	hash := req.GetHash()
 	response := new(events.AuthResponse)
-	response, exist := a.cache.Get(hash)
-	if exist {
-		a.lg.DebugF("%v found in cache, check actual time", hash)
-		if response.Time.After(time.Now()) {
-			a.lg.DebugF("%v has actual time - %v, returning from cache", hash, response.Time.String())
-			return response, nil
-		} else {
-			a.lg.DebugF("%v must be actualized from api", hash)
+	exist := false
+	if a.Conf.Auth.Caching.Enabled {
+		response, exist = a.cache.Get(hash)
+		if exist {
+			a.lg.DebugF("%v found in cache, check actual time", hash)
+			if response.Time.After(time.Now()) {
+				a.lg.DebugF("%v has actual time - %v, returning from cache", hash, response.Time.String())
+				return response, nil
+			} else {
+				a.lg.DebugF("%v must be actualized from api", hash)
+			}
 		}
+	} else {
+		a.lg.DebugF("caching disabled, not checking")
 	}
 	a.lg.DebugF("%v try get data over API", hash)
 
@@ -135,13 +140,16 @@ func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 	} else if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	actualizeTime := time.Now().Add(a.Conf.Auth.Caching.ActualizeTimeout)
-	if actualizeTime.After(time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))) {
-		a.lg.Warningf("detected lease_time_sec has a small time. Actualize time will be set as lease time")
-		actualizeTime = time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))
+
+	if a.Conf.Auth.Caching.Enabled {
+		actualizeTime := time.Now().Add(a.Conf.Auth.Caching.ActualizeTimeout)
+		if actualizeTime.After(time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))) {
+			a.lg.Warningf("detected lease_time_sec has a small time. Actualize time will be set as lease time")
+			actualizeTime = time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))
+		}
+		apiResp.Time = actualizeTime
+		a.cache.Set(hash, *apiResp)
 	}
-	apiResp.Time = actualizeTime
-	a.cache.Set(hash, *apiResp)
 	return apiResp, nil
 }
 func (a *Api) SendPostAuth(auth *PostAuth) {
