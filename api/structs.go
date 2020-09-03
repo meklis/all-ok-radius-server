@@ -44,7 +44,22 @@ type PostAuth struct {
 
 func InitPostAuth(req events.AuthRequest, resp events.AuthResponse) *PostAuth {
 	p := new(PostAuth)
-	p.Request = req
-	p.Response = resp
+	p.Request = events.AuthRequest{
+		NasIp:           req.NasIp,
+		NasName:         req.NasName,
+		DeviceMac:       req.DeviceMac,
+		DhcpServerName:  req.DhcpServerName,
+		DhcpServerId:    req.DhcpServerId,
+		FramedIpAddress: req.FramedIpAddress,
+		Class:           req.Class,
+	}
+	p.Response = events.AuthResponse{
+		IpAddress:    resp.IpAddress,
+		PoolName:     resp.PoolName,
+		LeaseTimeSec: resp.LeaseTimeSec,
+		Status:       resp.Status,
+		Error:        resp.Error,
+		Class:        resp.Class,
+	}
 	return p
 }
