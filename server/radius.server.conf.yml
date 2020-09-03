@@ -9,13 +9,16 @@ logger:
     log_level: 6
     print_file: true
 
+
 #Prometheus configuration
 prometheus:
   path: /metrics
   enabled: true
   port: 2112
   detailed: true
-  #Profiler pprof. Must be disabled in production
+
+
+#Profiler pprof. Must be disabled in production
 profiler:
   port: 2155
   enabled: true
@@ -49,20 +52,20 @@ api:
     # Конфигурирование действий при недоступности API
     # Недоступностью считается - ошибки HTTP >= 500, проблемы с коннектом (connection timeout, connection refused, fail resolve domain)
     alive_checking:
-      enabled: true
+      enabled: false
       disable_timeout: 60s # На это время API-адрес будет исключен из списка
     addresses:
-      - http://apiv2.golden.net.ua/v2/trusted/equipment/radius/request
+      - http://localhost/v2/trusted/equipment/radius/request
   acct:
     enabled: true
     count_readers: 5
     addresses:
-      - http://apiv2.golden.net.ua/v2/trusted/equipment/radius/acct
+      - http://localhost/v2/trusted/equipment/radius/acct
   #Отправляет результат выдачи IP после ответа на запрос(или паралельно с ответом на запрос)
   postauth:
-    enabled: false
+    enabled: true
     count_readers: 5
     addresses:
-     - http://apiv2.golden.net.ua/v2/trusted/equipment/radius
+     - http://localhost/v2/trusted/equipment/radius
 
   timeout: 3s # Максимальное время ответа API

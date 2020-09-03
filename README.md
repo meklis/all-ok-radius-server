@@ -7,7 +7,8 @@
 * Работа со списком источников API (для резервирования и балансировки)   
 * Проверка работоспособности и отключение неработающих API на определенные время     
 * Кеширование ответов API (для уменьшения нагрузки и резервирования на случай недоступности всех API)
-* Radreply и PostAuth запросы в API. 
+* Radreply и PostAuth запросы в API
+* Accounting requests
 
 #### ***Radius***     
 * Чтение и передача в API следующих параметров: 
@@ -21,6 +22,9 @@
 * Парсинг Circuit-Id, Remote-Id (option82) и передача на апи 
    в виде remote_id, vlan_id, module, port. На данный момент поддерживается только оборудование от D-Link
 * Радиус может выдавать пул или конкретный ip-адрес c указанием времени жизни лиза.    
+#### Changelog
+Изменения можно просмотреть здесь - [CHANGELOG.md](CHANGELOG.md)
+
 #### ***Другое***
 * Гибкое конфигурирование кеширования и актуализации работы с API    
 * Поддержка передачи метрик в формате Prometheus (описание метрик смотрите в экспортере)
@@ -120,6 +124,30 @@
 Радиус не анализирует ответ от API    
 
 
+## Работа с API (Accounting)     
+**Сервер отправляет POST-запрос с Content-Type: application/json.**    
+Структура:    
+```
+struct {
+	string `json:"nas_ip" 
+	string `json:"nas_name"  
+	string `json:"device_mac"`
+	string `json:"dhcp_server_name"`
+	string `json:"dhcp_server_id"`
+	string `json:"ip_address"`
+	string `json:"auth_type"`
+	string `json:"class_id"`
+	string `json:"status_type"`
+	int64  `json:"session_time"`
+	string `json:"terminate_cause"`
+	int64  `json:"input_octets"`
+	int64  `json:"output_octets"`
+	string `json:"pool_name"`
+	string `json:"session_id"`
+}
+
+```   
+Радиус не анализирует ответ от API    
 
 ### Как запустить       
 1. Можно использовать докер (описание находится в ./install/docker)    
