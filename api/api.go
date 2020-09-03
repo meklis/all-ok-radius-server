@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/tls"
 	"fmt"
 	"github.com/imroc/req"
 	"github.com/meklis/all-ok-radius-server/api/cache"
@@ -9,39 +10,126 @@ import (
 	"github.com/meklis/all-ok-radius-server/prom"
 	"github.com/meklis/all-ok-radius-server/radius/events"
 	"github.com/ztrue/tracerr"
+	"net/http"
+	"net/http/cookiejar"
 	"sync"
 	"time"
 )
 
 type Api struct {
 	sync.Mutex
-	Conf    ApiConfig
-	cache   *cache.CacheApi
-	sources *sources.Sources
-	lg      *logger.Logger
+	Conf            ApiConfig
+	cache           *cache.CacheApi
+	sources         *sources.Sources
+	lg              *logger.Logger
+	postAuthChannel chan *PostAuth
+	acctChannel     chan *events.AcctRequest
 }
 
 func Init(conf ApiConfig, lg *logger.Logger) *Api {
+	req.Client().Jar, _ = cookiejar.New(nil)
+	trans, _ := req.Client().Transport.(*http.Transport)
+	trans.MaxIdleConns = 20
+	trans.TLSHandshakeTimeout = 5 * time.Second
+	trans.DisableKeepAlives = true
+	trans.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
 	api := new(Api)
 	api.Conf = conf
-	api.cache = cache.Init(conf.RadReply.Caching.TimeoutExpires)
-	api.sources = sources.New(conf.RadReply.Addresses, lg, conf.RadReply.AliveChecking.DisableTimeout)
+	api.cache = cache.Init(conf.Auth.Caching.TimeoutExpires)
+	api.sources = sources.New(conf.Auth.Addresses, lg, conf.Auth.AliveChecking.DisableTimeout)
 	api.lg = lg
+
+	//Post auth reader
+	if conf.PostAuth.Enabled {
+		api.postAuthChannel = make(chan *PostAuth, 100)
+		lg.NoticeF("start postAuth readers")
+		for i := 0; i < conf.PostAuth.CountReaders; i++ {
+			go func() {
+				htReq := req.New()
+				for {
+					auth := <-api.postAuthChannel
+					for _, addr := range conf.PostAuth.Addresses {
+						response, err := htReq.Post(addr, req.BodyJSON(auth))
+						if err != nil {
+							prom.ErrorsInc(prom.Error, "api")
+							lg.ErrorF("post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+							continue
+						}
+						if response.Response().StatusCode != 200 {
+							prom.ErrorsInc(prom.Error, "api")
+							lg.ErrorF("post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+							continue
+						}
+					}
+				}
+			}()
+		}
+		go func() {
+			for {
+				time.Sleep(time.Second)
+				prom.SetPostAuthQueueSize(len(api.postAuthChannel))
+			}
+		}()
+	} else {
+		lg.NoticeF("postAuth disabled")
+	}
+
+	//Init acct readers
+	if conf.Acct.Enabled {
+		api.acctChannel = make(chan *events.AcctRequest, 100)
+		lg.NoticeF("start acct readers")
+		for i := 0; i < conf.Acct.CountReaders; i++ {
+			go func() {
+				htReq := req.New()
+				for {
+					acct := <-api.acctChannel
+					for _, addr := range conf.Acct.Addresses {
+						response, err := htReq.Post(addr, req.BodyJSON(acct))
+						if err != nil {
+							prom.ErrorsInc(prom.Error, "api")
+							lg.ErrorF("acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+							continue
+						}
+						if response.Response().StatusCode != 200 {
+							prom.ErrorsInc(prom.Error, "api")
+							lg.ErrorF("acct report returned err from addr %v: %v", addr, tracerr.Sprint(err))
+							continue
+						}
+					}
+				}
+			}()
+		}
+		go func() {
+			for {
+				time.Sleep(time.Second)
+				prom.SetAcctQueueSize(len(api.acctChannel))
+			}
+		}()
+	} else {
+		lg.NoticeF("acct request disabled")
+	}
+
 	return api
 }
 
-func (a *Api) Get(req *events.Request) (*events.Response, error) {
+func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 	hash := req.GetHash()
-	response := new(events.Response)
-	response, exist := a.cache.Get(hash)
-	if exist {
-		a.lg.DebugF("%v found in cache, check actual time", hash)
-		if response.Time.After(time.Now()) {
-			a.lg.DebugF("%v has actual time - %v, returning from cache", hash, response.Time.String())
-			return response, nil
-		} else {
-			a.lg.DebugF("%v must be actualized from api", hash)
+	response := new(events.AuthResponse)
+	exist := false
+	if a.Conf.Auth.Caching.Enabled {
+		response, exist = a.cache.Get(hash)
+		if exist {
+			a.lg.DebugF("%v found in cache, check actual time", hash)
+			if response.Time.After(time.Now()) {
+				a.lg.DebugF("%v has actual time - %v, returning from cache", hash, response.Time.String())
+				return response, nil
+			} else {
+				a.lg.DebugF("%v must be actualized from api", hash)
+			}
 		}
+	} else {
+		a.lg.DebugF("caching disabled, not checking")
 	}
 	a.lg.DebugF("%v try get data over API", hash)
 
@@ -53,37 +141,43 @@ func (a *Api) Get(req *events.Request) (*events.Response, error) {
 	} else if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	actualizeTime := time.Now().Add(a.Conf.RadReply.Caching.ActualizeTimeout)
-	if actualizeTime.After(time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))) {
-		a.lg.Warningf("Detected lease_time_sec has a small time. Actualize time will be set as lease time")
-		actualizeTime = time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))
+
+	if a.Conf.Auth.Caching.Enabled {
+		actualizeTime := time.Now().Add(a.Conf.Auth.Caching.ActualizeTimeout)
+		if actualizeTime.After(time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))) {
+			a.lg.Warningf("detected lease_time_sec has a small time. Actualize time will be set as lease time")
+			actualizeTime = time.Now().Add(time.Second * time.Duration(apiResp.LeaseTimeSec))
+		}
+		apiResp.Time = actualizeTime
+		a.cache.Set(hash, *apiResp)
 	}
-	apiResp.Time = actualizeTime
-	a.cache.Set(hash, *apiResp)
 	return apiResp, nil
 }
-func (a *Api) SendPostAuth(auth PostAuth) {
+func (a *Api) SendPostAuth(auth *PostAuth) {
 	if !a.Conf.PostAuth.Enabled {
 		return
 	}
-	go func() {
-		for _, addr := range a.Conf.PostAuth.Addresses {
-			response, err := req.Post(addr, req.BodyJSON(&auth))
-			if err != nil {
-				prom.ErrorsInc(prom.Error, "api")
-				a.lg.ErrorF("Post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
-				continue
-			}
-			if response.Response().StatusCode != 200 {
-				prom.ErrorsInc(prom.Error, "api")
-				a.lg.ErrorF("Post auth report returned err from addr %v: %v", addr, tracerr.Sprint(err))
-				continue
-			}
-		}
-	}()
+	select {
+	case a.postAuthChannel <- auth:
+	default:
+		a.lg.WarningF("post auth channel is full! Try to increase reader count")
+		a.lg.DebugF("request %v-%v-%v will be dropped", auth.Request.NasIp, auth.Request.DeviceMac, auth.Request.DhcpServerName)
+	}
 }
 
-func (a *Api) _getFromApi(request *events.Request) (*events.Response, error) {
+func (a *Api) SendAcct(acct *events.AcctRequest) {
+	if !a.Conf.Acct.Enabled {
+		return
+	}
+	select {
+	case a.acctChannel <- acct:
+	default:
+		a.lg.WarningF("acct channel is full! Try to increase reader count")
+		a.lg.DebugF("acct %v-%v-%v with ip %v will be dropped ", acct.NasIp, acct.DeviceMac, acct.DhcpServerName, acct.FramedIpAddress)
+	}
+}
+
+func (a *Api) _getFromApi(request *events.AuthRequest) (*events.AuthResponse, error) {
 	source, err := a.sources.GetSource()
 	if err != nil {
 		a.lg.DebugF("not found sources - %v", err.Error())

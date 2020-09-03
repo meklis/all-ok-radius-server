@@ -14,6 +14,11 @@ prometheus:
   path: /metrics
   enabled: true
   port: 2112
+  detailed: true
+  #Profiler pprof. Must be disabled in production
+profiler:
+  port: 2155
+  enabled: true
 
 #Конфигурация радиус-сервера
 radius:
@@ -29,7 +34,7 @@ api:
   # Можно указать несколько API адресов. Они будут использоваться равномерно, по принципу round-robin.
   # Можно использовать для распределения нагрузки или как для резервирования.
   # Недоступные API будут исключаться из списка на некоторое время
-  radreply:
+  auth:
     # Настройки кеширования
     # Кеширование используется для уменьшения количества запросов к API.
     # Так же, если установить expire_timeout на много больше actualize_timeout это позволит хранить ответы с АПИ в памяти радиуса
@@ -47,12 +52,17 @@ api:
       enabled: true
       disable_timeout: 60s # На это время API-адрес будет исключен из списка
     addresses:
-      - http://apiv2.loc/v2/trusted/equipment/radius-request
-
+      - http://apiv2.golden.net.ua/v2/trusted/equipment/radius/request
+  acct:
+    enabled: true
+    count_readers: 5
+    addresses:
+      - http://apiv2.golden.net.ua/v2/trusted/equipment/radius/acct
   #Отправляет результат выдачи IP после ответа на запрос(или паралельно с ответом на запрос)
   postauth:
-    enabled: true
+    enabled: false
+    count_readers: 5
     addresses:
-     - http://apiv2.loc/v2/trusted/equipment/radius-post-auth
+     - http://apiv2.golden.net.ua/v2/trusted/equipment/radius
 
   timeout: 3s # Максимальное время ответа API

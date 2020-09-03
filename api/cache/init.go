@@ -23,16 +23,16 @@ func Init(expireTimeout time.Duration) *CacheApi {
 	return c
 }
 
-func (c *CacheApi) Get(hash string) (*events.Response, bool) {
+func (c *CacheApi) Get(hash string) (*events.AuthResponse, bool) {
 	if resp, exist := c.responses.Get(hash); exist {
-		ret := resp.(events.Response)
+		ret := resp.(events.AuthResponse)
 		return &ret, true
 	} else {
-		return &events.Response{}, false
+		return nil, false
 	}
 }
 
-func (c *CacheApi) Set(hash string, resp events.Response) *CacheApi {
+func (c *CacheApi) Set(hash string, resp events.AuthResponse) *CacheApi {
 	c.responses.SetDefault(hash, resp)
 	return c
 }

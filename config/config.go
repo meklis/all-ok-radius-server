@@ -27,6 +27,7 @@ type Configuration struct {
 		RecalcEstabConnsTimeout time.Duration     `yaml:"recalc_estab_timeout"`
 		LiveRecalc              bool              `yaml:"live_recalc"`
 		Labels                  map[string]string `yaml:"static_labels"`
+		Detailed                bool              `yaml:"detailed"`
 	} `yaml:"prometheus"`
 	Radius struct {
 		ListenAddr          string `yaml:"listen_addr"`
@@ -34,6 +35,11 @@ type Configuration struct {
 		AgentParsingEnabled bool   `yaml:"agent_parsing_enabled"`
 	} `yaml:"radius"`
 	Api api.ApiConfig `yaml:"api"`
+
+	Profiler struct {
+		Port    int  `yaml:"port"`
+		Enabled bool `yaml:"enabled"`
+	} `yaml:"profiler"`
 }
 
 func LoadConfig(path string, Config *Configuration) error {
