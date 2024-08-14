@@ -28,11 +28,16 @@ type Api struct {
 
 func Init(conf ApiConfig, lg *logger.Logger) *Api {
 	req.Client().Jar, _ = cookiejar.New(nil)
+
 	trans, _ := req.Client().Transport.(*http.Transport)
 	trans.MaxIdleConns = 20
 	trans.TLSHandshakeTimeout = 5 * time.Second
 	trans.DisableKeepAlives = true
 	trans.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	cl := req.Client()
+	cl.Transport = trans
+	req.SetClient(cl)
 
 	api := new(Api)
 	api.Conf = conf

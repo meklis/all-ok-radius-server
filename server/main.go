@@ -21,8 +21,8 @@ var (
 )
 
 const (
-	VERSION    = "0.2.11"
-	BUILD_DATE = "2020-09-02"
+	VERSION    = "0.2.12"
+	BUILD_DATE = "2024-08-18"
 )
 
 func init() {
