@@ -2,13 +2,14 @@ package config
 
 import (
 	"fmt"
-	"github.com/meklis/all-ok-radius-server/api"
-	"github.com/meklis/all-ok-radius-server/logger"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/meklis/all-ok-radius-server/api"
+	"github.com/meklis/all-ok-radius-server/logger"
+	"gopkg.in/yaml.v2"
 )
 
 type Configuration struct {
@@ -30,9 +31,8 @@ type Configuration struct {
 		Detailed                bool              `yaml:"detailed"`
 	} `yaml:"prometheus"`
 	Radius struct {
-		ListenAddr          string `yaml:"listen_addr"`
-		Secret              string `yaml:"secret"`
-		AgentParsingEnabled bool   `yaml:"agent_parsing_enabled"`
+		ListenAddr string `yaml:"listen_addr"`
+		Secret     string `yaml:"secret"`
 	} `yaml:"radius"`
 	Api api.ApiConfig `yaml:"api"`
 

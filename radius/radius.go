@@ -2,22 +2,22 @@ package radius
 
 import (
 	"fmt"
-	rad_api "github.com/meklis/all-ok-radius-server/api"
-	"github.com/meklis/all-ok-radius-server/logger"
-	"layeh.com/radius"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	rad_api "github.com/meklis/all-ok-radius-server/api"
+	"github.com/meklis/all-ok-radius-server/logger"
+	"layeh.com/radius"
 )
 
 type Radius struct {
-	lg           *logger.Logger
-	listenAddr   string
-	secret       string
-	agentParsing bool
-	api          *rad_api.Api
-	classId      int64
+	lg         *logger.Logger
+	listenAddr string
+	secret     string
+	api        *rad_api.Api
+	classId    int64
 	sync.Mutex
 }
 
@@ -25,7 +25,6 @@ func Init() *Radius {
 	rad := new(Radius)
 	rad.listenAddr = "0.0.0.0:1812"
 	rad.secret = "secret"
-	rad.agentParsing = true
 	rad.lg, _ = logger.New("radius", 0, os.Stdout)
 	rad.classId = time.Now().Unix()
 	return rad
@@ -48,10 +47,6 @@ func (rad *Radius) SetListenAddr(listenAddr string) *Radius {
 }
 func (rad *Radius) SetSecret(secret string) *Radius {
 	rad.secret = secret
-	return rad
-}
-func (rad *Radius) SetAgentParsing(enabled bool) *Radius {
-	rad.agentParsing = enabled
 	return rad
 }
 

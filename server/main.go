@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
+	"net/http/pprof"
+
 	"github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/config"
 	"github.com/meklis/all-ok-radius-server/logger"
@@ -10,8 +13,6 @@ import (
 	"github.com/meklis/all-ok-radius-server/radius"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ztrue/tracerr"
-	"net/http"
-	"net/http/pprof"
 )
 
 var (
@@ -76,7 +77,6 @@ func main() {
 	//Initialize server
 	rad := radius.Init()
 	err := rad.SetAPI(apiInstance).
-		SetAgentParsing(Config.Radius.AgentParsingEnabled).
 		SetListenAddr(Config.Radius.ListenAddr).
 		SetLogger(lg).
 		SetSecret(Config.Radius.Secret).

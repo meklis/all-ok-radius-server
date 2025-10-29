@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/prom"
 	"github.com/meklis/all-ok-radius-server/radius/events"
@@ -105,29 +106,14 @@ func (rad *Radius) _parseAuthRequest(r *radius.Request) (events.AuthRequest, err
 	dhcpServerName := rfc2865.CalledStationID_GetString(r.Packet)
 	dhcpServerId := rfc2865.CallingStationID_GetString(r.Packet)
 	rad.lg.DebugF("%v %x: nasName=%v, nasIpAddr=%v, deviceMac=%v, dhcpServerName=%v, dhcpServerId=%v", r.Code.String(), r.Authenticator, nasName, nasIpAddr, deviceMAC, dhcpServerName, dhcpServerId)
-	agent := new(events.AuthRequestAgent)
+	agent := new(events.AuthRequestOption)
 	remoteId := redback_agent_parsers.ParseRemoteId(redback.AgentRemoteID_Get(r.Packet))
-	if remoteId == "" && rad.agentParsing {
-		prom.ErrorsInc(prom.Warning, "radius")
-		rad.lg.WarningF("%v %x: no agent information in request (deviceMac=%v, nasIp=%v, dhcpServerName=%v)", r.Code.String(), r.Authenticator, deviceMAC, nasIpAddr, dhcpServerName)
-		agent = nil
-	} else {
-		agent.RemoteId = remoteId
-		rad.lg.DebugF("%v %x: agentRemoteId=%v", r.Code.String(), r.Authenticator, agent.RemoteId)
-		if bts := redback.AgentCircuitID_Get(r.Packet); len(bts) > 2 {
-			agent.RawCircuitId = fmt.Sprintf("%X", bts[2:])
-			if rad.agentParsing {
-				circuit, er := redback_agent_parsers.Parse(bts)
-				if er != nil {
-					prom.ErrorsInc(prom.Error, "radius")
-					rad.lg.ErrorF("%v %x: error parse circuitId=%x from remote agentId=%v", r.Code.String(), r.Authenticator, bts, remoteId)
-				} else {
-					rad.lg.DebugF("%v %x: agentCircuitId=%x", r.Code.String(), r.Authenticator, bts[2:])
-					rad.lg.DebugF("%v %x: resultParse circuitId - port=%v, vlanId=%v, moduleNum=%v ", r.Code.String(), r.Authenticator, circuit.Port, circuit.VlanId, circuit.Module)
-					agent.Circuit = circuit
-				}
-			}
-		}
+
+	agent.RemoteId = remoteId
+	rad.lg.DebugF("%v %x: agentRemoteId=%v", r.Code.String(), r.Authenticator, agent.RemoteId)
+	if bts := redback.AgentCircuitID_Get(r.Packet); len(bts) > 2 {
+		agent.RawCircuitId = fmt.Sprintf("%X", bts[2:])
+
 	}
 	request := events.AuthRequest{
 		NasIp:          nasIpAddr,
@@ -135,7 +121,7 @@ func (rad *Radius) _parseAuthRequest(r *radius.Request) (events.AuthRequest, err
 		DeviceMac:      deviceMAC,
 		DhcpServerName: dhcpServerName,
 		DhcpServerId:   dhcpServerId,
-		Agent:          agent,
+		AgentOption:    agent,
 	}
 	return request, nil
 }

@@ -1,7 +1,14 @@
+# github.com/VividCortex/ewma v1.1.1
+github.com/VividCortex/ewma
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
+# github.com/cheggaaa/pb/v3 v3.0.4
+github.com/cheggaaa/pb/v3
+github.com/cheggaaa/pb/v3/termutil
+# github.com/fatih/color v1.7.0
+github.com/fatih/color
 # github.com/golang/protobuf v1.4.2
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
@@ -12,6 +19,12 @@ github.com/golang/protobuf/ptypes/timestamp
 github.com/imroc/req
 # github.com/logrusorgru/aurora v0.0.0-20181002194514-a7b3b318ed4e
 github.com/logrusorgru/aurora
+# github.com/mattn/go-colorable v0.1.2
+github.com/mattn/go-colorable
+# github.com/mattn/go-isatty v0.0.10
+github.com/mattn/go-isatty
+# github.com/mattn/go-runewidth v0.0.7
+github.com/mattn/go-runewidth
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/meklis/go-cache v2.1.0+incompatible
@@ -70,7 +83,8 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/yaml.v2 v2.3.0
 gopkg.in/yaml.v2
-# layeh.com/radius v0.0.0-20200615152116-663b41c3bf86
+# layeh.com/radius v0.0.0-20190322222518-890bc1058917
 layeh.com/radius
 layeh.com/radius/rfc2865
+layeh.com/radius/rfc2866
 layeh.com/radius/rfc2869

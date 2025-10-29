@@ -21,16 +21,15 @@ prometheus:
 #Profiler pprof. Must be disabled in production
 profiler:
   port: 2155
-  enabled: true
+  enabled: false
 
 #Конфигурация радиус-сервера
 radius:
   listen_addr: 0.0.0.0:1812
+  proto: "udp"
 # Такие параметры как secret можно вынести в переменные окружения. Для этого вместо значения secret необходимо указать ${RADIUS_SECRET}
 # где RADIUS_SECRET - переменная окружения
   secret: secret
-#Нужно ли проверять и формировать запрос с Agent-Сircuit-Id, Agent-Remote-Id.
-  agent_parsing_enabled: true
 
 #Конфигурирование работы API.
 api:
@@ -45,9 +44,9 @@ api:
     #
     # Стоит учитывать что actualize_time не может быть больше lease_time_sec. Если подобное случается, устанавливается время лиза
     caching:
-      actualize_timeout: 1m # Как часто нужно актуализироовать данные с API, даже если они есть в кеше
+      actualize_timeout: 10s # Как часто нужно актуализироовать данные с API, даже если они есть в кеше
       enabled: true
-      expire_timeout: 60m
+      expire_timeout: 10m
 
     # Конфигурирование действий при недоступности API
     # Недоступностью считается - ошибки HTTP >= 500, проблемы с коннектом (connection timeout, connection refused, fail resolve domain)

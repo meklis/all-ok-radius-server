@@ -4,26 +4,24 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"github.com/meklis/all-ok-radius-server/redback_agent_parsers"
 	"net"
 	"time"
 )
 
 type AuthRequest struct {
-	NasIp           string            `json:"nas_ip" yaml:"nas_ip"`
-	NasName         string            `json:"nas_name" yaml:"nas_name"`
-	DeviceMac       string            `json:"device_mac"`
-	DhcpServerName  string            `json:"dhcp_server_name"`
-	DhcpServerId    string            `json:"dhcp_server_id"`
-	Agent           *AuthRequestAgent `json:"agent"`
-	FramedIpAddress string            `json:"ip_address"`
-	Class           string            `json:"class_id"`
+	NasIp           string             `json:"nas_ip" yaml:"nas_ip"`
+	NasName         string             `json:"nas_name" yaml:"nas_name"`
+	DeviceMac       string             `json:"device_mac"`
+	DhcpServerName  string             `json:"dhcp_server_name"`
+	DhcpServerId    string             `json:"dhcp_server_id"`
+	AgentOption     *AuthRequestOption `json:"option"`
+	FramedIpAddress string             `json:"ip_address"`
+	Class           string             `json:"class_id"`
 }
 
-type AuthRequestAgent struct {
-	Circuit      *redback_agent_parsers.CircuitId `json:"circuit_id"`
-	RemoteId     string                           `json:"remote_id"`
-	RawCircuitId string                           `json:"_raw_circuit_id"`
+type AuthRequestOption struct {
+	RemoteId     string `json:"remote_id"`
+	RawCircuitId string `json:"circuit_id"`
 }
 
 func (r *AuthRequest) GetHash() string {
