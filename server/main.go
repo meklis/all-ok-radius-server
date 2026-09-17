@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/pprof"
+	"strings"
 
 	"github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/config"
 	"github.com/meklis/all-ok-radius-server/logger"
 	"github.com/meklis/all-ok-radius-server/prom"
 	"github.com/meklis/all-ok-radius-server/radius"
+	"github.com/meklis/all-ok-radius-server/script"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ztrue/tracerr"
 )
@@ -71,12 +73,26 @@ func main() {
 			}
 		}()
 	}
-	//Initialize API
-	apiInstance := api.Init(Config.Api, lg)
+	//Initialize processor (api или script - выбор по Config.Processor)
+	var processor radius.Processor
+	switch strings.ToLower(Config.Processor) {
+	case "", config.ProcessorAPI:
+		lg.NoticeF("processor: api")
+		processor = api.Init(Config.Api, lg)
+	case config.ProcessorScript:
+		lg.NoticeF("processor: script")
+		p, err := script.NewProcessor(Config.Script, lg)
+		if err != nil {
+			lg.FatalF("failed to init script processor: %v", err)
+		}
+		processor = p
+	default:
+		lg.FatalF("unknown processor %q, expected %q or %q", Config.Processor, config.ProcessorAPI, config.ProcessorScript)
+	}
 
 	//Initialize server
 	rad := radius.Init()
-	err := rad.SetAPI(apiInstance).
+	err := rad.SetProcessor(processor).
 		SetListenAddr(Config.Radius.ListenAddr).
 		SetLogger(lg).
 		SetSecret(Config.Radius.Secret).

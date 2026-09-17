@@ -9,7 +9,13 @@ import (
 
 	"github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/logger"
+	"github.com/meklis/all-ok-radius-server/script"
 	"gopkg.in/yaml.v2"
+)
+
+const (
+	ProcessorAPI    = "api"
+	ProcessorScript = "script"
 )
 
 type Configuration struct {
@@ -34,7 +40,11 @@ type Configuration struct {
 		ListenAddr string `yaml:"listen_addr"`
 		Secret     string `yaml:"secret"`
 	} `yaml:"radius"`
-	Api api.ApiConfig `yaml:"api"`
+
+	// processor: "api" (по умолчанию) или "script" - выбирает, какой из блоков ниже используется
+	Processor string        `yaml:"processor"`
+	Api       api.ApiConfig `yaml:"api"`
+	Script    script.Config `yaml:"script"`
 
 	Profiler struct {
 		Port    int  `yaml:"port"`

@@ -31,7 +31,22 @@ radius:
 # где RADIUS_SECRET - переменная окружения
   secret: secret
 
-#Конфигурирование работы API.
+#Выбор бэкенда обработки auth/acct/postauth: api (по умолчанию, ниже) или script (Lua, см. блок script)
+processor: api
+
+#Встроенный Lua-скрипт (аналог lua-nginx-module/rlm_python). Используется только при processor: script
+#Каждый метод - свой скрипт (можно указать один и тот же файл для нескольких методов).
+#auth обязателен, acct/post_auth опциональны - если путь не задан, метод просто не обрабатывается скриптом.
+#Скрипт компилируется один раз при старте и выполняется в пуле из pool_size изолированных состояний.
+#Пример - script/examples/example.lua
+script:
+  pool_size: 10
+  timeout: 3s
+  auth: /etc/radius/scripts/auth.lua
+  acct: /etc/radius/scripts/acct.lua
+  post_auth: /etc/radius/scripts/post_auth.lua
+
+#Конфигурирование работы API. Используется только при processor: api
 api:
   # Можно указать несколько API адресов. Они будут использоваться равномерно, по принципу round-robin.
   # Можно использовать для распределения нагрузки или как для резервирования.

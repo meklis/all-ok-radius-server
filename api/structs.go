@@ -42,7 +42,7 @@ type PostAuth struct {
 	Response events.AuthResponse `json:"response"`
 }
 
-func InitPostAuth(req events.AuthRequest, resp events.AuthResponse) *PostAuth {
+func newPostAuth(req events.AuthRequest, resp events.AuthResponse) *PostAuth {
 	p := new(PostAuth)
 	p.Request = events.AuthRequest{
 		NasIp:           req.NasIp,

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	rad_api "github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/logger"
 	"layeh.com/radius"
 )
@@ -16,7 +15,7 @@ type Radius struct {
 	lg         *logger.Logger
 	listenAddr string
 	secret     string
-	api        *rad_api.Api
+	processor  Processor
 	classId    int64
 	sync.Mutex
 }
@@ -50,8 +49,8 @@ func (rad *Radius) SetSecret(secret string) *Radius {
 	return rad
 }
 
-func (rad *Radius) SetAPI(apiR *rad_api.Api) *Radius {
-	rad.api = apiR
+func (rad *Radius) SetProcessor(p Processor) *Radius {
+	rad.processor = p
 	return rad
 }
 
