@@ -23,7 +23,7 @@ func testEngine(t *testing.T, path string) *Engine {
 }
 
 // dlinkCircuitID - vlan=101 (0x0065), stack=0, port=3 - см. смещения в examples/auth.lua
-const dlinkCircuitID = "00040000650003"
+const dlinkCircuitID = "000000650003"
 
 func TestCallAuthorizeError(t *testing.T) {
 	e := testEngine(t, "examples/auth.lua")
@@ -68,4 +68,3 @@ func TestCallPostAuth(t *testing.T) {
 		t.Fatalf("CallPostAuth: %v", err)
 	}
 }
-

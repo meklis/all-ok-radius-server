@@ -25,13 +25,33 @@ profiler:
 
 #Конфигурация радиус-сервера
 radius:
-  listen_addr: 0.0.0.0:1812
-  proto: "udp"
-  # Такие параметры как secret можно вынести в переменные окружения. Для этого вместо значения secret необходимо указать ${RADIUS_SECRET}
-  # где RADIUS_SECRET - переменная окружения
-  secret: secret
+  listen_addr: ${RADIUS_LISTEN_ADDR}
+  # Задаётся через переменную окружения RADIUS_SECRET (см. .env)
+  secret: ${RADIUS_SECRET}
 
-#Конфигурирование работы API.
+#Выбор бэкенда обработки auth/acct/postauth: api или script (Lua, см. блок script)
+processor: script
+
+#Встроенный Lua-скрипт. Каждый метод - свой скрипт (auth обязателен, acct/post_auth опциональны).
+#Скрипты из script/examples репозитория копируются в образ в /opt/scripts (см. Dockerfile) -
+#свои скрипты можно подложить вместо них, смонтировав volume поверх /opt/scripts
+script:
+  pool_size: 10
+  timeout: 3s
+  auth: /opt/scripts/auth.lua
+  acct: /opt/scripts/acct.lua
+  post_auth: /opt/scripts/post_auth.lua
+  #База устройств/смартов/привязок, доступная в скриптах через глобальный db. Обязательна при
+  #processor: script. Адрес задаётся через переменную окружения CLIENTDB_URL (см. .env)
+  database:
+    devices_url: ${CLIENTDB_URL}?type=devices
+    binds:
+      clients: ${CLIENTDB_URL}?type=binds
+      smart: ${CLIENTDB_URL}?type=smart
+    refresh_interval: 5m
+    timeout: 90s # binds отдаёт сотни тысяч строк - таймаут на весь запрос, включая чтение тела
+
+#Конфигурирование работы API. Используется только при processor: api
 api:
   # Можно указать несколько API адресов. Они будут использоваться равномерно, по принципу round-robin.
   # Можно использовать для распределения нагрузки или как для резервирования.
@@ -54,17 +74,17 @@ api:
       enabled: false
       disable_timeout: 60s # На это время API-адрес будет исключен из списка
     addresses:
-      - http://localhost/v2/trusted/equipment/radius/request
+      - ${API_ADDR}/radius/request
   acct:
     enabled: true
     count_readers: 5
     addresses:
-      - http://localhost/v2/trusted/equipment/radius/acct
+      - ${API_ADDR}/radius/acct
   #Отправляет результат выдачи IP после ответа на запрос(или паралельно с ответом на запрос)
   postauth:
     enabled: true
     count_readers: 5
     addresses:
-      - http://localhost/v2/trusted/equipment/radius
+      - ${API_ADDR}/radius
 
   timeout: 3s # Максимальное время ответа API

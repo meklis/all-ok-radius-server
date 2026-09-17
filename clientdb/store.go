@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/meklis/all-ok-radius-server/logger"
+	"github.com/meklis/all-ok-radius-server/prom"
 )
 
 // Config - параметры загрузки внешней базы устройств и привязок.
@@ -130,9 +131,13 @@ func (s *Store) reload() error {
 
 	s.snap.Store(&snapshot{devices: devices, binds: binds})
 	s.lg.NoticeF("clientdb: база обновлена: devices=%v", len(devices))
+	bindCounts := make(map[string]int, len(binds))
 	for name, idx := range binds {
 		s.lg.NoticeF("clientdb: binds.%v=%v", name, idx.count)
+		bindCounts[name] = idx.count
 	}
+	prom.SetClientDBSize(len(devices), bindCounts)
+	prom.SetClientDBLastReload(time.Now().Unix())
 	return nil
 }
 

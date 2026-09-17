@@ -45,7 +45,7 @@ func TestNewProcessorAuthOnly(t *testing.T) {
 		DeviceMac: "999999999999",
 		AgentOption: &events.AuthRequestOption{
 			RemoteId:     "08:5A:11:94:65:E0",
-			RawCircuitId: "00040000650009", // vlan=101, port=9 - не в binds, "серый" пул
+			RawCircuitId: "000000650009", // vlan=101, port=9 - не в binds, "серый" пул
 		},
 	})
 	if err != nil {

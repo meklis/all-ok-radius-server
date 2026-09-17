@@ -110,9 +110,10 @@ func (rad *Radius) _parseAuthRequest(r *radius.Request) (events.AuthRequest, err
 
 	agent.RemoteId = remoteId
 	rad.lg.DebugF("%v %x: agentRemoteId=%v", r.Code.String(), r.Authenticator, agent.RemoteId)
-	if bts := redback.AgentCircuitID_Get(r.Packet); len(bts) > 2 {
-		agent.RawCircuitId = fmt.Sprintf("%X", bts[2:])
-
+	// байты отдаются как есть - формат содержимого зависит от вендора свитча
+	// и разбирается уже в скрипте/api по db.devices.parse_type, не здесь
+	if bts := redback.AgentCircuitID_Get(r.Packet); len(bts) > 0 {
+		agent.RawCircuitId = fmt.Sprintf("%X", bts)
 	}
 	request := events.AuthRequest{
 		NasIp:          nasIpAddr,

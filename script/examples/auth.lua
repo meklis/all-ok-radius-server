@@ -1,12 +1,36 @@
--- Обработчик auth-запросов (script.auth).
--- request.option.remote_id  - мак свитча (формат AA:BB:CC:DD:EE:FF)
--- request.option.circuit_id - circuit-id, hex-строка без "0x"
+-- Обработчик auth-запросов (script.auth) - вызывается на каждый Access-Request,
+-- должен определять function authorize(request) -> table.
 --
--- Тип оборудования для парсинга circuit_id берётся из db:getDeviceByMac(mac_sw).parse_type.
--- db обязателен при processor: script (см. script.database.devices_url).
+-- ПОЛЯ request:
+--   request.nas_ip            - NAS-IP-Address (IP свитча/relay, приславшего запрос)
+--   request.nas_name          - NAS-Identifier
+--   request.device_mac        - мак абонентского устройства (User-Name)
+--   request.dhcp_server_name  - Called-Station-Id
+--   request.dhcp_server_id    - Calling-Station-Id
+--   request.ip_address        - Framed-IP-Address из запроса, если был
+--   request.class_id          - Class
+--   request.option            - таблица (пустая, если в пакете нет option82)
+--   request.option.remote_id  - мак свитча/OLT из option82 Agent-Remote-Id (AA:BB:CC:DD:EE:FF) или nil
+--   request.option.circuit_id - option82 Agent-Circuit-Id, hex-строка без "0x", или nil
 --
--- db.binds: "clients" (ip;client_mac;device_mac;port, ip=2.2.2.2/4.4.4.4/5.5.5.5 -
--- метки IPTV/WIFI/YOUTUBE-пулов) и "smart" (ip;client_mac - устройства без порта)
+-- ВОЗВРАТ authorize():
+--   ip_address     - выдать конкретный IP (приоритетнее pool_name, если заданы оба)
+--   pool_name      - выдать имя пула (DHCP-сервер сам берёт IP из пула)
+--   lease_time_sec - время аренды в секундах (Session-Timeout)
+--   error          - если задано, остальные поля игнорируются: клиенту не отвечаем вовсе
+--                    (RADIUS-таймаут на NAS, а не Access-Reject)
+--
+-- ГЛОБАЛЬНЫЕ ОБЪЕКТЫ:
+--   db:getDeviceByMac(mac) -> table{ip, mac, parse_type} | nil
+--       поиск в script.database.devices_url по мак-адресу свитча/OLT
+--   db:getBind(source, mac, device_mac, port) -> array of table{ip, port, client_mac, device_mac}
+--       source - имя источника из script.database.binds (например "clients"/"smart")
+--       mac/device_mac/port - опциональны ("" или не передавать), но нужен либо mac,
+--       либо пара device_mac+port - иначе вернётся пустой массив
+--   log.debug(msg) / log.info(msg) / log.notice(msg) / log.warning(msg) / log.error(msg)
+--       пишут в общий лог сервера с соответствующим уровнем
+--
+-- db обязателен при processor: script (см. script.database.devices_url в конфиге)
 
 local CREDIT_HOUR = 6      -- час, после которого лиз считается "до утра"
 local TIMEOUT_WIFI = 1800  -- незарегистрированный wifi-мак (66:99:...)
@@ -46,9 +70,13 @@ local function hexToStr(hex)
     return table.concat(chars)
 end
 
--- парсеры circuit-id по типу оборудования (db.devices.parse_type)
+-- парсеры circuit-id по db.devices.parse_type. circuit_id - сырые байты сабопции
+-- option82 как есть (без срезов на стороне Go) - смещения свои под каждый вендор свитча
 local circuitParsers = {}
 
+-- ZTE OLT: текстовый s=slot p=port o=onu v=vlan m=src-mac (подтверждено трафиком и
+-- конфигом устройства). m= не используется - macSw для этого формата определяется
+-- отдельно, см. authorize()
 circuitParsers["zte"] = function(circuit)
     local raw = hexToStr((circuit:gsub("^0[xX]", "")))
     local vlan = tonumber(raw:match("v=(%d+)"))
@@ -61,24 +89,33 @@ circuitParsers["zte"] = function(circuit)
     return vlan, stack, stack * 100000 + p * 1000 + o
 end
 
+-- BDCOM: 5 байт без заголовка - vlan, неиспользуемый байт, stack, port_raw
+-- (подтверждено трафиком)
 circuitParsers["bdcom"] = function(circuit)
-    local vlan, stack, port = hexByte(circuit, 3, 4), hexByte(circuit, 9, 2), hexByte(circuit, 11, 2)
-    if not vlan or not stack or not port then
+    local vlan, stack, portRaw = hexByte(circuit, 1, 4), hexByte(circuit, 7, 2), hexByte(circuit, 9, 2)
+    if not vlan or not stack or not portRaw then
         return nil
     end
-    return vlan, stack, stack * 1000 + port
+    return vlan, stack, stack * 1000 + portRaw
 end
 
+-- C-Data: те же смещения, что и bdcom (по perl-скрипту - общее семейство BDcom-cicrNN),
+-- НЕ подтверждено трафиком этого сервера
+circuitParsers["cdata"] = circuitParsers["bdcom"]
+
+-- D-Link: 6 байт - 2 байта заголовка, vlan, module/stack, port (подтверждено трафиком)
 circuitParsers["dlink"] = function(circuit)
-    local vlan, stack, port = hexByte(circuit, 7, 4), hexByte(circuit, 11, 2), hexByte(circuit, 13, 2)
+    local vlan, stack, port = hexByte(circuit, 5, 4), hexByte(circuit, 9, 2), hexByte(circuit, 11, 2)
     if not vlan or not stack or not port then
         return nil
     end
     return vlan, stack, port
 end
 
+-- Edgecore: смещения из perl-скрипта минус 1 байт заголовка (по аналогии с dlink/bdcom),
+-- НЕ подтверждено трафиком этого сервера
 circuitParsers["edgecore"] = function(circuit)
-    local vlan, stack, port = hexByte(circuit, 7, 4), hexByte(circuit, 3, 2), hexByte(circuit, 5, 2)
+    local stack, port, vlan = hexByte(circuit, 1, 2), hexByte(circuit, 3, 2), hexByte(circuit, 5, 4)
     if not vlan or not stack or not port then
         return nil
     end
@@ -102,17 +139,21 @@ end
 
 function authorize(request)
     local macAbon = request.device_mac
-    -- option82 может отсутствовать целиком - request.option.* тогда nil
     local macSw = request.option.remote_id or ""
     local circuitId = request.option.circuit_id or ""
 
-    -- mac_sw может быть пустым, если в запросе нет option82
     local parseType = nil
     if macSw ~= "" then
         local device = db:getDeviceByMac(macSw)
         if device then
             parseType = device.parse_type
         end
+    end
+
+    -- ZTE OLT (l2-relay-agent) не всегда отправляет remote-id, но его circuit_id
+    -- самоописываемый текстовый (s=.. p=.. o=.. v=.. m=..) - тип определяем прямо по нему
+    if not parseType and hexToStr(circuitId):match("^s=%d") then
+        parseType = "zte"
     end
 
     local vlan, stack, port = circuitReader(circuitId, parseType)
@@ -174,5 +215,6 @@ function authorize(request)
     if macAbon:match("^66:99:") then
         return { pool_name = "INET-" .. vlan .. "-WIFI", lease_time_sec = TIMEOUT_WIFI }
     end
+
     return { pool_name = "INET-" .. vlan .. "-FAKE", lease_time_sec = TIMEOUT_FAKE }
 end

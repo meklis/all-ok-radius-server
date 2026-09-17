@@ -24,8 +24,10 @@ func testDBServer(t *testing.T) *httptest.Server {
 		switch r.URL.Query().Get("type") {
 		case "devices":
 			w.Write([]byte("33686018;085A119465E0;dlink\n"))
+			w.Write([]byte("33686018;AABBCCDDEEAA;cdata\n"))
 		case "clients":
 			w.Write([]byte(clientsBindsData))
+			w.Write([]byte("16909063;112233445577;AABBCCDDEEAA;2005\n"))
 		}
 	}))
 }
@@ -81,7 +83,7 @@ func TestEngineWithDBSharedPortIPTV(t *testing.T) {
 		DeviceMac: "112233445566",
 		AgentOption: &events.AuthRequestOption{
 			RemoteId:     "08:5A:11:94:65:E0",
-			RawCircuitId: "00040000650006", // vlan=101, port=6
+			RawCircuitId: "000000650006", // vlan=101, port=6
 		},
 	})
 	if err != nil {
@@ -89,6 +91,26 @@ func TestEngineWithDBSharedPortIPTV(t *testing.T) {
 	}
 	if resp.PoolName != "INET-101-FAKE" {
 		t.Errorf("expected pool_name=INET-101-FAKE, got %+v", resp)
+	}
+}
+
+func TestEngineWithDBCdataParser(t *testing.T) {
+	e := testEngineWithDB(t)
+
+	// cdata - алиас на bdcom-парсер: vlan=101(0x0065), unused=00, stack=2, port_raw=5 -> port=2005
+	resp, err := e.CallAuthorize(&events.AuthRequest{
+		NasIp:     "10.0.0.1",
+		DeviceMac: "112233445577",
+		AgentOption: &events.AuthRequestOption{
+			RemoteId:     "AA:BB:CC:DD:EE:AA",
+			RawCircuitId: "0065000205",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallAuthorize: %v", err)
+	}
+	if resp.IpAddress != "1.2.3.7" {
+		t.Errorf("expected ip_address=1.2.3.7, got %+v", resp)
 	}
 }
 
@@ -101,7 +123,7 @@ func TestEngineWithDBMultipleBindsMatchByMac(t *testing.T) {
 		DeviceMac: "AAAAAAAAAAAA",
 		AgentOption: &events.AuthRequestOption{
 			RemoteId:     "08:5A:11:94:65:E0",
-			RawCircuitId: "00040000650007", // vlan=101, port=7
+			RawCircuitId: "000000650007", // vlan=101, port=7
 		},
 	})
 	if err != nil {
@@ -122,7 +144,7 @@ func TestEngineWithDBMultipleBindsNoMacMatch(t *testing.T) {
 		DeviceMac: "CCCCCCCCCCCC",
 		AgentOption: &events.AuthRequestOption{
 			RemoteId:     "08:5A:11:94:65:E0",
-			RawCircuitId: "00040000650007",
+			RawCircuitId: "000000650007",
 		},
 	})
 	if err != nil {
@@ -142,7 +164,7 @@ func TestEngineWithDBGenericFallback(t *testing.T) {
 		DeviceMac: "999999999999",
 		AgentOption: &events.AuthRequestOption{
 			RemoteId:     "08:5A:11:94:65:E0",
-			RawCircuitId: "00040000650009", // vlan=101, port=9
+			RawCircuitId: "000000650009", // vlan=101, port=9
 		},
 	})
 	if err != nil {
@@ -161,7 +183,7 @@ func TestEngineWithDBWifiMacFallback(t *testing.T) {
 		DeviceMac: "66:99:CC:DD:EE:FF",
 		AgentOption: &events.AuthRequestOption{
 			RemoteId:     "08:5A:11:94:65:E0",
-			RawCircuitId: "00040000650009",
+			RawCircuitId: "000000650009",
 		},
 	})
 	if err != nil {
@@ -169,6 +191,27 @@ func TestEngineWithDBWifiMacFallback(t *testing.T) {
 	}
 	if resp.PoolName != "INET-101-WIFI" || resp.LeaseTimeSec != 1800 {
 		t.Errorf("expected pool_name=INET-101-WIFI lease=1800, got %+v", resp)
+	}
+}
+
+func TestEngineWithDBZteTextFormatNoRemoteId(t *testing.T) {
+	e := testEngineWithDB(t)
+
+	// ZTE OLT (l2-relay-agent): remote_id отсутствует, circuit_id - самоописываемый
+	// текстовый формат (s=3 p=1 o=13 v=2146 m=e848.b842.2f7d) - тип парсинга должен
+	// определиться по виду circuit_id, без похода в db по пустому macSw
+	resp, err := e.CallAuthorize(&events.AuthRequest{
+		NasIp:     "10.0.0.1",
+		DeviceMac: "E8:48:B8:42:2F:7D",
+		AgentOption: &events.AuthRequestOption{
+			RawCircuitId: "733D3320703D31206F3D313320763D32313436206D3D653834382E623834322E32663764",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallAuthorize: %v", err)
+	}
+	if resp.PoolName != "INET-2146-FAKE" || resp.LeaseTimeSec != 120 {
+		t.Errorf("expected pool_name=INET-2146-FAKE lease=120, got %+v", resp)
 	}
 }
 

@@ -62,6 +62,18 @@ var (
 		Name: "rad_mac_server_count",
 		Help: "Detailed requests count info by MAC - DHCP-server",
 	}, []string{"host", "mac", "server_name", "response_type"})
+	clientDBDevicesCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "rad_clientdb_devices_count",
+		Help: "Count of devices currently loaded in clientdb",
+	}, []string{})
+	clientDBBindsCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "rad_clientdb_binds_count",
+		Help: "Count of binds currently loaded in clientdb, by source",
+	}, []string{"source"})
+	clientDBLastReloadTimestamp = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "rad_clientdb_last_reload_timestamp_seconds",
+		Help: "Unix timestamp of the last successful clientdb reload",
+	}, []string{})
 	PromEnabled                bool
 	PromDetailedMacInfoEnabled bool
 )
@@ -159,6 +171,23 @@ func SetApiStatus(address string, alive bool) {
 		status = 0
 	}
 	apiAliveStatus.With(map[string]string{"api_addr": address}).Set(float64(status))
+}
+
+func SetClientDBSize(devices int, binds map[string]int) {
+	if !PromEnabled {
+		return
+	}
+	clientDBDevicesCount.With(map[string]string{}).Set(float64(devices))
+	for source, count := range binds {
+		clientDBBindsCount.With(map[string]string{"source": source}).Set(float64(count))
+	}
+}
+
+func SetClientDBLastReload(unixSeconds int64) {
+	if !PromEnabled {
+		return
+	}
+	clientDBLastReloadTimestamp.With(map[string]string{}).Set(float64(unixSeconds))
 }
 
 func SysInfo(version string, buildDate string) {
