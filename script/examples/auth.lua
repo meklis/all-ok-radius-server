@@ -137,23 +137,49 @@ local function circuitReader(circuit, parseType)
     return vlan, stack, port
 end
 
+-- Определение parse_type без похода в db - применяется когда remote-id отсутствует
+-- и искать устройство по мак-адресу свитча не по чему. Пробует по очереди:
+--   1. самоописываемый текстовый ZTE-формат (s=.. p=.. o=.. v=.. m=..)
+--   2. длину circuit_id, как в perl-скрипте: dlink - 6 байт (12 hex), bdcom - 5 байт
+--      (10 hex), обе длины подтверждены реальным трафиком. Для cdata/edgecore
+--      подтверждённой длины нет - по длине их не различаем
+local function parseTypeByUnknownDevice(circuit)
+    if hexToStr(circuit):match("^s=%d") then
+        return "zte"
+    end
+    local len = #circuit
+    if len == 12 then
+        return "dlink"
+    elseif len == 10 then
+        return "bdcom"
+    end
+    return nil
+end
+
 function authorize(request)
     local macAbon = request.device_mac
     local macSw = request.option.remote_id or ""
     local circuitId = request.option.circuit_id or ""
 
-    local parseType = nil
-    if macSw ~= "" then
-        local device = db:getDeviceByMac(macSw)
-        if device then
-            parseType = device.parse_type
+    -- без remote-id нет мака свитча - ни db:getDeviceByMac, ни привязки по устройству+порту
+    -- недоступны в принципе. К базе вообще не обращаемся - определяем vlan прямо из
+    -- circuit_id (текстовый ZTE-формат или по длине) и выдаём общий "серый" пул
+    if macSw == "" then
+        local parseType = parseTypeByUnknownDevice(circuitId)
+        local vlan = circuitReader(circuitId, parseType)
+
+        log.debug("authorize: mac=" .. macAbon .. " mac_sw= parse_type=" .. tostring(parseType) .. " vlan=" .. tostring(vlan))
+
+        if not vlan then
+            return { error = "circuit_id parse failed: mac_sw= parse_type=" .. tostring(parseType) .. " circuit_id=" .. circuitId }
         end
+        return { pool_name = "INET-" .. vlan .. "-FAKE", lease_time_sec = TIMEOUT_FAKE }
     end
 
-    -- ZTE OLT (l2-relay-agent) не всегда отправляет remote-id, но его circuit_id
-    -- самоописываемый текстовый (s=.. p=.. o=.. v=.. m=..) - тип определяем прямо по нему
-    if not parseType and hexToStr(circuitId):match("^s=%d") then
-        parseType = "zte"
+    local parseType = nil
+    local device = db:getDeviceByMac(macSw)
+    if device then
+        parseType = device.parse_type
     end
 
     local vlan, stack, port = circuitReader(circuitId, parseType)
