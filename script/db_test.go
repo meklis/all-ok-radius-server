@@ -215,6 +215,46 @@ func TestEngineWithDBZteTextFormatNoRemoteId(t *testing.T) {
 	}
 }
 
+func TestEngineWithDBNoRemoteIdLengthFallbackDlink(t *testing.T) {
+	e := testEngineWithDB(t)
+
+	// remote_id отсутствует, circuit_id - 12 hex (6 байт), формат не ZTE-текст -
+	// тип парсинга определяется по длине (dlink), а не через db
+	resp, err := e.CallAuthorize(&events.AuthRequest{
+		NasIp:     "10.0.0.1",
+		DeviceMac: "999999999999",
+		AgentOption: &events.AuthRequestOption{
+			RawCircuitId: "000000650009", // vlan=101, port=9
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallAuthorize: %v", err)
+	}
+	if resp.PoolName != "INET-101-FAKE" || resp.LeaseTimeSec != 120 {
+		t.Errorf("expected pool_name=INET-101-FAKE lease=120, got %+v", resp)
+	}
+}
+
+func TestEngineWithDBNoRemoteIdLengthFallbackBdcom(t *testing.T) {
+	e := testEngineWithDB(t)
+
+	// remote_id отсутствует, circuit_id - 10 hex (5 байт) - тип парсинга
+	// определяется по длине (bdcom)
+	resp, err := e.CallAuthorize(&events.AuthRequest{
+		NasIp:     "10.0.0.1",
+		DeviceMac: "999999999999",
+		AgentOption: &events.AuthRequestOption{
+			RawCircuitId: "0065000209", // vlan=101, stack=2, port_raw=9 -> port=2009
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallAuthorize: %v", err)
+	}
+	if resp.PoolName != "INET-101-FAKE" || resp.LeaseTimeSec != 120 {
+		t.Errorf("expected pool_name=INET-101-FAKE lease=120, got %+v", resp)
+	}
+}
+
 func TestEngineWithoutDB(t *testing.T) {
 	// db не сконфигурирован - тип оборудования взять неоткуда, circuit_id не распознан
 	e := testEngine(t, "examples/auth.lua")
