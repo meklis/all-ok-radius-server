@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/meklis/all-ok-radius-server/clientdb"
 	"github.com/meklis/all-ok-radius-server/logger"
 	"github.com/meklis/all-ok-radius-server/prom"
 	"github.com/meklis/all-ok-radius-server/radius/events"
@@ -12,11 +13,12 @@ import (
 // Config - путь к своему lua-скрипту на каждый метод (auth обязателен, acct/post_auth опциональны).
 // pool_size/timeout общие для всех сконфигурированных скриптов.
 type Config struct {
-	PoolSize int           `yaml:"pool_size"`
-	Timeout  time.Duration `yaml:"timeout"`
-	Auth     string        `yaml:"auth"`
-	Acct     string        `yaml:"acct"`
-	PostAuth string        `yaml:"post_auth"`
+	PoolSize int             `yaml:"pool_size"`
+	Timeout  time.Duration   `yaml:"timeout"`
+	Auth     string          `yaml:"auth"`
+	Acct     string          `yaml:"acct"`
+	PostAuth string          `yaml:"post_auth"`
+	Database clientdb.Config `yaml:"database"`
 }
 
 type postAuthEvent struct {
@@ -27,6 +29,7 @@ type postAuthEvent struct {
 // Processor реализует radius.Processor поверх встроенных Lua-скриптов
 type Processor struct {
 	lg              *logger.Logger
+	db              *clientdb.Store
 	authEngine      *Engine
 	acctEngine      *Engine
 	postAuthEngine  *Engine
@@ -41,7 +44,15 @@ func NewProcessor(conf Config, lg *logger.Logger) (*Processor, error) {
 
 	p := &Processor{lg: lg}
 
-	authEngine, err := New(conf.Auth, conf.PoolSize, conf.Timeout, lg)
+	// при processor: script база обязательна - без неё скрипты не могут
+	// определить тип оборудования (db.devices.parse_type) для парсинга circuit_id
+	db, err := clientdb.New(conf.Database, lg)
+	if err != nil {
+		return nil, fmt.Errorf("script.database: %w", err)
+	}
+	p.db = db
+
+	authEngine, err := New(conf.Auth, conf.PoolSize, conf.Timeout, lg, p.db)
 	if err != nil {
 		return nil, fmt.Errorf("script.auth (%v): %w", conf.Auth, err)
 	}
@@ -51,7 +62,7 @@ func NewProcessor(conf Config, lg *logger.Logger) (*Processor, error) {
 	p.authEngine = authEngine
 
 	if conf.Acct != "" {
-		acctEngine, err := New(conf.Acct, conf.PoolSize, conf.Timeout, lg)
+		acctEngine, err := New(conf.Acct, conf.PoolSize, conf.Timeout, lg, p.db)
 		if err != nil {
 			return nil, fmt.Errorf("script.acct (%v): %w", conf.Acct, err)
 		}
@@ -66,7 +77,7 @@ func NewProcessor(conf Config, lg *logger.Logger) (*Processor, error) {
 	}
 
 	if conf.PostAuth != "" {
-		postAuthEngine, err := New(conf.PostAuth, conf.PoolSize, conf.Timeout, lg)
+		postAuthEngine, err := New(conf.PostAuth, conf.PoolSize, conf.Timeout, lg, p.db)
 		if err != nil {
 			return nil, fmt.Errorf("script.post_auth (%v): %w", conf.PostAuth, err)
 		}

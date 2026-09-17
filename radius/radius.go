@@ -3,6 +3,7 @@ package radius
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -62,10 +63,47 @@ func (rad *Radius) ListenAndServe() error {
 		Handler:      radius.HandlerFunc(rad.handler),
 	}
 
-	rad.lg.InfoF("Starting radius server on %v", rad.listenAddr)
+	rad.logListenAddr()
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 		return err
 	}
 	return nil
+}
+
+// logListenAddr пишет порт и интерфейс(ы), на которых слушает радиус.
+// Для 0.0.0.0/:: - перечисляет реальные адреса всех сетевых интерфейсов
+func (rad *Radius) logListenAddr() {
+	host, port, err := net.SplitHostPort(rad.listenAddr)
+	if err != nil {
+		rad.lg.InfoF("Starting radius server on %v", rad.listenAddr)
+		return
+	}
+
+	if host != "" && host != "0.0.0.0" && host != "::" {
+		rad.lg.InfoF("Starting radius server: interface=%v port=%v", host, port)
+		return
+	}
+
+	rad.lg.InfoF("Starting radius server: interface=%v (all) port=%v", host, port)
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok || ipNet.IP.IsLinkLocalUnicast() {
+				continue
+			}
+			rad.lg.InfoF("  interface %v: %v", iface.Name, addr.String())
+		}
+	}
 }

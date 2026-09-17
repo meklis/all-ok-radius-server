@@ -32,19 +32,31 @@ radius:
   secret: secret
 
 #Выбор бэкенда обработки auth/acct/postauth: api (по умолчанию, ниже) или script (Lua, см. блок script)
-processor: api
+processor: script
 
 #Встроенный Lua-скрипт (аналог lua-nginx-module/rlm_python). Используется только при processor: script
 #Каждый метод - свой скрипт (можно указать один и тот же файл для нескольких методов).
 #auth обязателен, acct/post_auth опциональны - если путь не задан, метод просто не обрабатывается скриптом.
 #Скрипт компилируется один раз при старте и выполняется в пуле из pool_size изолированных состояний.
-#Пример - script/examples/example.lua
+#Пути ниже - примеры из script/examples (относительно корня репозитория). В проде обычно
+#указывают абсолютный путь, например /etc/radius/scripts/auth.lua
 script:
   pool_size: 10
   timeout: 3s
-  auth: /etc/radius/scripts/auth.lua
-  acct: /etc/radius/scripts/acct.lua
-  post_auth: /etc/radius/scripts/post_auth.lua
+  auth: script/examples/auth.lua
+  acct: script/examples/acct.lua
+  post_auth: script/examples/post_auth.lua
+  #Опционально: база устройств/смартов/привязок, доступная в скриптах через глобальный db.
+  #Если url не задан - db в скриптах не создаётся.
+  #Адрес базы вынесен в переменную окружения CLIENTDB_URL (аналогично RADIUS_SECRET выше) -
+  #в конфиге он не хранится
+  database:
+    devices_url: ${CLIENTDB_URL}?type=devices # обязательное
+    binds:
+      clients: ${CLIENTDB_URL}?type=binds
+      smart: ${CLIENTDB_URL}?type=smart
+    refresh_interval: 5m
+    timeout: 90s # binds отдаёт сотни тысяч строк - таймаут на весь запрос, включая чтение тела
 
 #Конфигурирование работы API. Используется только при processor: api
 api:

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/meklis/all-ok-radius-server/clientdb"
 	"github.com/meklis/all-ok-radius-server/logger"
 	"github.com/meklis/all-ok-radius-server/radius/events"
 )
@@ -19,10 +20,18 @@ func testLogger(t *testing.T) *logger.Logger {
 }
 
 func TestNewProcessorAuthOnly(t *testing.T) {
+	srv := testDBServer(t)
+	defer srv.Close()
+
 	p, err := NewProcessor(Config{
 		Auth:     "examples/auth.lua",
 		PoolSize: 2,
 		Timeout:  time.Second,
+		Database: clientdb.Config{
+			DevicesURL:      srv.URL + "?type=devices",
+			Binds:           map[string]string{"clients": srv.URL + "?type=clients"},
+			RefreshInterval: time.Hour,
+		},
 	}, testLogger(t))
 	if err != nil {
 		t.Fatalf("NewProcessor: %v", err)
@@ -31,12 +40,19 @@ func TestNewProcessorAuthOnly(t *testing.T) {
 		t.Fatal("acct/post_auth не заданы в конфиге, но движки созданы")
 	}
 
-	resp, err := p.Get(&events.AuthRequest{NasIp: "10.0.0.1", DeviceMac: "AA:BB:CC:DD:EE:FF"})
+	resp, err := p.Get(&events.AuthRequest{
+		NasIp:     "10.0.0.1",
+		DeviceMac: "999999999999",
+		AgentOption: &events.AuthRequestOption{
+			RemoteId:     "08:5A:11:94:65:E0",
+			RawCircuitId: "00040000650009", // vlan=101, port=9 - не в binds, "серый" пул
+		},
+	})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if resp.PoolName != "default" {
-		t.Errorf("expected pool_name=default, got %q", resp.PoolName)
+	if resp.PoolName != "INET-101-FAKE" {
+		t.Errorf("expected pool_name=INET-101-FAKE, got %q", resp.PoolName)
 	}
 
 	// без сконфигурированных acct/post_auth вызовы должны быть no-op, без паники
@@ -51,13 +67,33 @@ func TestNewProcessorRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestNewProcessorRequiresDatabase(t *testing.T) {
+	// при processor: script database.devices_url обязателен, даже если auth задан
+	_, err := NewProcessor(Config{
+		Auth:     "examples/auth.lua",
+		PoolSize: 2,
+		Timeout:  time.Second,
+	}, testLogger(t))
+	if err == nil {
+		t.Fatal("expected error when script.database.devices_url is empty")
+	}
+}
+
 func TestNewProcessorAllPhases(t *testing.T) {
+	srv := testDBServer(t)
+	defer srv.Close()
+
 	p, err := NewProcessor(Config{
 		Auth:     "examples/auth.lua",
 		Acct:     "examples/acct.lua",
 		PostAuth: "examples/post_auth.lua",
 		PoolSize: 2,
 		Timeout:  time.Second,
+		Database: clientdb.Config{
+			DevicesURL:      srv.URL + "?type=devices",
+			Binds:           map[string]string{"clients": srv.URL + "?type=clients"},
+			RefreshInterval: time.Hour,
+		},
 	}, testLogger(t))
 	if err != nil {
 		t.Fatalf("NewProcessor: %v", err)

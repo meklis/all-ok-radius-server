@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/meklis/all-ok-radius-server/clientdb"
 	"github.com/meklis/all-ok-radius-server/logger"
 	"github.com/meklis/all-ok-radius-server/radius/events"
 	lua "github.com/yuin/gopher-lua"
@@ -26,10 +27,12 @@ type Engine struct {
 	proto     *lua.FunctionProto
 	functions map[string]bool
 	pool      chan *lua.LState
+	store     *clientdb.Store
 }
 
-// New компилирует скрипт path один раз и прогревает пул из poolSize Lua-состояний
-func New(path string, poolSize int, timeout time.Duration, lg *logger.Logger) (*Engine, error) {
+// New компилирует скрипт path один раз и прогревает пул из poolSize Lua-состояний.
+// store может быть nil - тогда глобальная переменная db в скрипте не создаётся
+func New(path string, poolSize int, timeout time.Duration, lg *logger.Logger, store *clientdb.Store) (*Engine, error) {
 	if poolSize <= 0 {
 		poolSize = 5
 	}
@@ -49,6 +52,7 @@ func New(path string, poolSize int, timeout time.Duration, lg *logger.Logger) (*
 		proto:     proto,
 		functions: make(map[string]bool),
 		pool:      make(chan *lua.LState, poolSize),
+		store:     store,
 	}
 
 	for i := 0; i < poolSize; i++ {
@@ -92,6 +96,7 @@ func compileFile(path string) (*lua.FunctionProto, error) {
 func (e *Engine) newState() (*lua.LState, error) {
 	ls := lua.NewState()
 	registerHelpers(ls, e.lg)
+	registerDB(ls, e.store)
 	lfunc := ls.NewFunctionFromProto(e.proto)
 	ls.Push(lfunc)
 	if err := ls.PCall(0, lua.MultRet, nil); err != nil {

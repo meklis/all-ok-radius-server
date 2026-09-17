@@ -15,40 +15,31 @@ func testEngine(t *testing.T, path string) *Engine {
 	if err != nil {
 		t.Fatalf("logger.New: %v", err)
 	}
-	e, err := New(path, 2, time.Second, lg)
+	e, err := New(path, 2, time.Second, lg, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	return e
 }
 
-func TestCallAuthorize(t *testing.T) {
-	e := testEngine(t, "examples/auth.lua")
-
-	resp, err := e.CallAuthorize(&events.AuthRequest{
-		NasIp:     "10.0.0.1",
-		DeviceMac: "AA:BB:CC:DD:EE:FF",
-	})
-	if err != nil {
-		t.Fatalf("CallAuthorize: %v", err)
-	}
-	if resp.PoolName != "default" {
-		t.Errorf("expected pool_name=default, got %q", resp.PoolName)
-	}
-	if resp.LeaseTimeSec != 3600 {
-		t.Errorf("expected lease_time_sec=3600, got %v", resp.LeaseTimeSec)
-	}
-}
+// dlinkCircuitID - vlan=101 (0x0065), stack=0, port=3 - см. смещения в examples/auth.lua
+const dlinkCircuitID = "00040000650003"
 
 func TestCallAuthorizeError(t *testing.T) {
 	e := testEngine(t, "examples/auth.lua")
 
+	// без db тип оборудования неизвестен -> circuit_id не распознан -> отказ
+	// (позитивные сценарии - в db_test.go, т.к. теперь требуют db.devices)
 	_, err := e.CallAuthorize(&events.AuthRequest{
 		NasIp:     "10.0.0.1",
-		DeviceMac: "",
+		DeviceMac: "AA:BB:CC:DD:EE:FF",
+		AgentOption: &events.AuthRequestOption{
+			RemoteId:     "08:5A:11:94:65:E0",
+			RawCircuitId: dlinkCircuitID,
+		},
 	})
 	if err == nil {
-		t.Fatal("expected error for empty device_mac, got nil")
+		t.Fatal("expected error without configured db, got nil")
 	}
 }
 
@@ -78,22 +69,3 @@ func TestCallPostAuth(t *testing.T) {
 	}
 }
 
-func TestConcurrentAuthorize(t *testing.T) {
-	e := testEngine(t, "examples/auth.lua")
-
-	done := make(chan error, 10)
-	for i := 0; i < 10; i++ {
-		go func() {
-			_, err := e.CallAuthorize(&events.AuthRequest{
-				NasIp:     "10.0.0.1",
-				DeviceMac: "AA:BB:CC:DD:EE:FF",
-			})
-			done <- err
-		}()
-	}
-	for i := 0; i < 10; i++ {
-		if err := <-done; err != nil {
-			t.Errorf("concurrent CallAuthorize: %v", err)
-		}
-	}
-}

@@ -179,6 +179,12 @@ MAC/агенту и т.п.) реализована на стороне HTTP API.
 в request ниже) - её нужно реализовать в скрипте самостоятельно, HTTP API при этом не участвует.
 
 Примеры скриптов - [script/examples/auth.lua](script/examples/auth.lua), [acct.lua](script/examples/acct.lua), [post_auth.lua](script/examples/post_auth.lua).
+`auth.lua` - рабочий пример: парсинг option82 под BDCOM/D-Link/ZTE/Edgecore и выдача
+ip/пула на основе `db`. Тип оборудования для парсинга circuit_id берётся из
+`db:getDeviceByMac(mac_sw).parse_type` (поле `parse_type` из `script.database.devices_url`).
+
+**`script.database` обязателен при `processor: script`** - без базы устройств скрипты не
+смогут работать с option82, сервер не запустится (`script.database.devices_url не задан`).
 
 ```yaml
 processor: script
@@ -188,6 +194,15 @@ script:
   auth: /etc/radius/scripts/auth.lua           # authorize(request) -> table
   acct: /etc/radius/scripts/acct.lua           # accounting(request)
   post_auth: /etc/radius/scripts/post_auth.lua # post_auth(request, response)
+  # Обязательно при processor: script - база устройств/привязок, доступная в скриптах через db
+  # Адрес базы задаётся через переменную окружения (${VAR} в конфиге подставляется из env), в конфиге не хранится
+  database:
+    devices_url: ${CLIENTDB_URL}?type=devices # обязательное
+    binds: # произвольный набор именованных источников привязок
+      clients: ${CLIENTDB_URL}?type=binds
+      smart: ${CLIENTDB_URL}?type=smart
+    refresh_interval: 5m
+    timeout: 30s
 ```
 
 Каждый файл может определять только нужную ему функцию - `authorize` для `script.auth`,
@@ -206,6 +221,31 @@ script:
 
 Внутри скрипта доступен глобальный объект `log` (`log.debug/info/notice/warning/error(msg)`) -
 пишет в общий лог радиус-сервера.
+
+### База устройств/привязок (`db`)
+Если задан `script.database`, при старте синхронно (fail-fast) загружается и раз в
+`refresh_interval` (по умолчанию 5m) обновляется база устройств и всех источников из
+`script.database.binds`. `devices_url` обязателен, если задан блок `database`. `binds` -
+произвольный набор именованных источников (в примере `clients` и `smart`, можно другие) -
+каждый опрашивается независимо, имя используется как первый аргумент `db:getBind(...)`.
+Каждый ответ - текст, одна запись на строку, поля разделены `;`. Данные полностью
+заменяются на каждое обновление - устаревшие записи, которых больше нет в ответе,
+автоматически исчезают.
+
+Строки источников `binds` поддерживают два формата:
+* `ip;client_mac` - без устройства и порта (например `smart`)
+* `ip;client_mac;device_mac;port` - полная привязка (например `clients`)
+
+Внутри скрипта доступен глобальный объект `db`:
+* `db:getDeviceByMac(mac) -> {ip, mac, parse_type} | nil`
+* `db:getBind(db_name, mac, [device_mac], [port]) -> array` - `db_name` - ключ из
+  `script.database.binds` (например `"clients"` или `"smart"`); `device_mac` и `port`
+  опциональны и уточняют поиск (мак клиента; мак клиента + мак устройства; мак клиента +
+  мак устройства + порт). Всегда возвращает массив (пустой, если ничего не найдено) - под
+  одним мак-адресом клиента может быть несколько привязок
+
+Мак-адреса сравниваются без учёта регистра и разделителей (`:`/`-`). Если `script.database`
+не задан - `db` в скрипте отсутствует (`if db then ... end` для опциональной проверки).
 
 ### Как запустить       
 1. Можно использовать докер (описание находится в ./install/docker)    
