@@ -2,8 +2,8 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: write
@@ -24,8 +24,6 @@ jobs:
             goarch: amd64
           - goos: darwin
             goarch: arm64
-    env:
-      VERSION: 0.3.${{ github.run_number }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +32,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+
+      - name: Set version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
 
       - name: Set build date
         run: echo "BUILD_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
@@ -69,12 +70,9 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Set version
-        run: echo "VERSION=0.3.${{ github.run_number }}" >> "$GITHUB_ENV"
-
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}
-          name: v${{ env.VERSION }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: dist/*
