@@ -1,4 +1,4 @@
-# All-Ok-Radius-Server
+# DHCP-Radius-Server
 ### Radius-сервер для обробки DHCP-запитів. Використовується для роботи з DHCP-серверами мікротика.
 
 ## Можливості    
