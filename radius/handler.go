@@ -52,7 +52,7 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 	if err != nil {
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error get answer from api's: %v", err.Error())
-		rad.lg.DebugF(tracerr.Sprint(err))
+		rad.lg.DebugF("%v", tracerr.Sprint(err))
 		rad.processor.SendPostAuth(req, events.AuthResponse{
 			Status: "ERROR",
 			Error:  fmt.Sprintf("%v", err),
@@ -92,7 +92,7 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 		})
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error write response: %v", err.Error())
-		rad.lg.DebugF(tracerr.Sprint(err))
+		rad.lg.DebugF("%v", tracerr.Sprint(err))
 		return
 	} else {
 		rad.processor.SendPostAuth(req, *resp)

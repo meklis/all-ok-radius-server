@@ -45,11 +45,18 @@ script:
   #processor: script. Адрес задаётся через переменную окружения CLIENTDB_URL (см. .env)
   database:
     devices_url: ${CLIENTDB_URL}?type=devices
+    #Строки binds имеют вид id;ip;client_mac[;device_mac;port] - id обязателен и должен
+    #быть уникален в пределах источника, по нему применяются точечные обновления из redis (см. ниже)
     binds:
       clients: ${CLIENTDB_URL}?type=binds
       smart: ${CLIENTDB_URL}?type=smart
     refresh_interval: 5m
     timeout: 90s # binds отдаёт сотни тысяч строк - таймаут на весь запрос, включая чтение тела
+    #Опционально: точечные обновления/удаления одной записи binds по id через redis pub/sub,
+    #в дополнение к полному refresh_interval-reload по HTTP выше. Если addr не задан - не используется.
+    redis:
+      addr: ${CLIENTDB_REDIS_ADDR}
+      channel: clientdb-bind-events
 
 #Конфигурирование работы API. Используется только при processor: api
 api:

@@ -13,10 +13,10 @@ import (
 // clients: реальная привязка (744D280EE846) на порту 3; порт 6 отдан под IPTV (2.2.2.2)
 // под чужим маком (AABBCCDDEEFF) - имитирует checkAbonIPTV; порт 7 - две личные
 // привязки разных абонентов на одном порту (несколько подключенных за одним свитч-портом)
-const clientsBindsData = "16909060;744D280EE846;085A119465E0;3\n" +
-	"33686018;AABBCCDDEEFF;085A119465E0;6\n" +
-	"16909061;AAAAAAAAAAAA;085A119465E0;7\n" +
-	"16909062;BBBBBBBBBBBB;085A119465E0;7\n"
+const clientsBindsData = "1;16909060;744D280EE846;085A119465E0;3\n" +
+	"2;33686018;AABBCCDDEEFF;085A119465E0;6\n" +
+	"3;16909061;AAAAAAAAAAAA;085A119465E0;7\n" +
+	"4;16909062;BBBBBBBBBBBB;085A119465E0;7\n"
 
 func testDBServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -27,7 +27,7 @@ func testDBServer(t *testing.T) *httptest.Server {
 			w.Write([]byte("33686018;AABBCCDDEEAA;cdata\n"))
 		case "clients":
 			w.Write([]byte(clientsBindsData))
-			w.Write([]byte("16909063;112233445577;AABBCCDDEEAA;2005\n"))
+			w.Write([]byte("5;16909063;112233445577;AABBCCDDEEAA;2005\n"))
 		}
 	}))
 }

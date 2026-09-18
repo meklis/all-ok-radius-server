@@ -10,16 +10,16 @@ import (
 	"github.com/meklis/all-ok-radius-server/logger"
 )
 
-// clients - формат ip;client_mac;device_mac;port
-const clientsSample = `33686018;744D280EE846;085A119465E0;3
-33686018;AABBCCDDEEFF;085A119465E0;6
-33686018;AABBCCDDEEFF;085A119465E0;7
-2887141235;1C61B459F78F;085A11946600;6
+// clients - формат id;ip;client_mac;device_mac;port
+const clientsSample = `1;33686018;744D280EE846;085A119465E0;3
+2;33686018;AABBCCDDEEFF;085A119465E0;6
+3;33686018;AABBCCDDEEFF;085A119465E0;7
+4;2887141235;1C61B459F78F;085A11946600;6
 `
 
-// smart - формат ip;client_mac (без устройства и порта)
-const smartSample = `33686018;744D280EE846
-169088289;0418D6EE60F1
+// smart - формат id;ip;client_mac (без устройства и порта)
+const smartSample = `1;33686018;744D280EE846
+2;169088289;0418D6EE60F1
 `
 
 const devicesSample = `33686018;085A119465E0;dlink
@@ -151,5 +151,111 @@ func TestReloadClearsStaleRecords(t *testing.T) {
 func TestNewRequiresDevicesURL(t *testing.T) {
 	if _, err := New(Config{}, testLogger(t)); err == nil {
 		t.Fatal("expected error for empty devices_url")
+	}
+}
+
+func TestApplyBindEventUpsertAndDelete(t *testing.T) {
+	srv := testServer(t, devicesSample, clientsSample, smartSample)
+	defer srv.Close()
+
+	s, err := New(testConfig(srv.URL), testLogger(t))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer s.Close()
+
+	// точечное добавление новой записи в "smart" по ID, без reload
+	if err := s.ApplyBindEvent(BindEvent{
+		DB:     "smart",
+		Action: "upsert",
+		Line:   "99;123456789;AA11BB22CC33",
+	}); err != nil {
+		t.Fatalf("ApplyBindEvent upsert: %v", err)
+	}
+	binds := s.GetBind("smart", "AA11BB22CC33", "", "")
+	if len(binds) != 1 || binds[0].IP.String() == "" {
+		t.Fatalf("new record not visible after upsert: %+v", binds)
+	}
+	if b, ok := s.GetBindByID("smart", "99"); !ok || b.ClientMac != "AA11BB22CC33" {
+		t.Fatalf("GetBindByID after upsert: %+v, ok=%v", b, ok)
+	}
+
+	// точечное обновление существующей записи "clients" (id=1) - меняем порт
+	if err := s.ApplyBindEvent(BindEvent{
+		DB:     "clients",
+		Action: "upsert",
+		Line:   "1;33686018;744D280EE846;085A119465E0;42",
+	}); err != nil {
+		t.Fatalf("ApplyBindEvent update: %v", err)
+	}
+	// старый порт больше не находится
+	if binds := s.GetBind("clients", "744D280EE846", "085A119465E0", "3"); len(binds) != 0 {
+		t.Errorf("old port still indexed after update: %+v", binds)
+	}
+	// новый порт находится
+	binds = s.GetBind("clients", "744D280EE846", "085A119465E0", "42")
+	if len(binds) != 1 || binds[0].Port != 42 {
+		t.Errorf("updated record not found by new port: %+v", binds)
+	}
+	// byDevicePort (поиск без мак клиента) тоже видит обновление
+	binds = s.GetBind("clients", "", "085A119465E0", "42")
+	if len(binds) != 1 {
+		t.Errorf("byDevicePort not updated: %+v", binds)
+	}
+
+	// точечное удаление по ID
+	if err := s.ApplyBindEvent(BindEvent{DB: "clients", Action: "delete", ID: "2"}); err != nil {
+		t.Fatalf("ApplyBindEvent delete: %v", err)
+	}
+	if binds := s.GetBind("clients", "AABBCCDDEEFF", "085A119465E0", "6"); len(binds) != 0 {
+		t.Errorf("expected record id=2 to be gone after delete: %+v", binds)
+	}
+	// сосед по тому же мак-адресу (id=3) должен остаться нетронутым
+	if binds := s.GetBind("clients", "AABBCCDDEEFF", "085A119465E0", "7"); len(binds) != 1 {
+		t.Errorf("expected sibling record id=3 to survive delete: %+v", binds)
+	}
+	if _, ok := s.GetBindByID("clients", "2"); ok {
+		t.Error("GetBindByID should not find deleted id")
+	}
+
+	// неизвестный источник - ошибка, не паника
+	if err := s.ApplyBindEvent(BindEvent{DB: "unknown-db", Action: "delete", ID: "1"}); err == nil {
+		t.Error("expected error for unknown db")
+	}
+
+	// неизвестный action - ошибка
+	if err := s.ApplyBindEvent(BindEvent{DB: "clients", Action: "bogus", ID: "1"}); err == nil {
+		t.Error("expected error for unknown action")
+	}
+}
+
+func TestReloadStillWinsOverLiveUpdates(t *testing.T) {
+	srv := testServer(t, devicesSample, clientsSample, smartSample)
+	defer srv.Close()
+
+	s, err := New(testConfig(srv.URL), testLogger(t))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer s.Close()
+
+	if err := s.ApplyBindEvent(BindEvent{
+		DB:     "smart",
+		Action: "upsert",
+		Line:   "99;123456789;AA11BB22CC33",
+	}); err != nil {
+		t.Fatalf("ApplyBindEvent: %v", err)
+	}
+	if _, ok := s.GetBindByID("smart", "99"); !ok {
+		t.Fatal("expected live-updated record before reload")
+	}
+
+	// полный reload от HTTP-источника (который не знает про точечное обновление)
+	// должен полностью заменить снапшот, как и раньше
+	if err := s.reload(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if _, ok := s.GetBindByID("smart", "99"); ok {
+		t.Error("live-update should not survive a full reload from a source that doesn't have it")
 	}
 }
