@@ -15,7 +15,7 @@ prometheus:
   path: /metrics
   enabled: true
   port: 2112
-  detailed: true
+  detailed: false
 
 
 #Profiler pprof. Must be disabled in production
