@@ -23,7 +23,7 @@ var (
 	lg         *logger.Logger
 )
 
-const (
+var (
 	VERSION    = "0.2.12"
 	BUILD_DATE = "2024-08-18"
 )
