@@ -9,7 +9,13 @@ import (
 
 	"github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/logger"
+	"github.com/meklis/all-ok-radius-server/script"
 	"gopkg.in/yaml.v2"
+)
+
+const (
+	ProcessorAPI    = "api"
+	ProcessorScript = "script"
 )
 
 type Configuration struct {
@@ -33,8 +39,15 @@ type Configuration struct {
 	Radius struct {
 		ListenAddr string `yaml:"listen_addr"`
 		Secret     string `yaml:"secret"`
+		// ReadBufferSize - размер SO_RCVBUF в байтах. 0 - системный default
+		// (обычно net.core.rmem_default, на busy-системах маловат под всплески).
+		ReadBufferSize int `yaml:"read_buffer_size"`
 	} `yaml:"radius"`
-	Api api.ApiConfig `yaml:"api"`
+
+	// processor: "api" (по умолчанию) или "script" - выбирает, какой из блоков ниже используется
+	Processor string        `yaml:"processor"`
+	Api       api.ApiConfig `yaml:"api"`
+	Script    script.Config `yaml:"script"`
 
 	Profiler struct {
 		Port    int  `yaml:"port"`

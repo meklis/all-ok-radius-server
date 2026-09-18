@@ -83,7 +83,7 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/yaml.v2 v2.3.0
 gopkg.in/yaml.v2
-# layeh.com/radius v0.0.0-20190322222518-890bc1058917
+# layeh.com/radius v0.0.0-20190322222518-890bc1058917 => ./third_party/layeh-radius
 layeh.com/radius
 layeh.com/radius/rfc2865
 layeh.com/radius/rfc2866

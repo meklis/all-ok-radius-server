@@ -158,10 +158,12 @@ func (a *Api) Get(req *events.AuthRequest) (*events.AuthResponse, error) {
 	}
 	return apiResp, nil
 }
-func (a *Api) SendPostAuth(auth *PostAuth) {
+
+func (a *Api) SendPostAuth(req events.AuthRequest, resp events.AuthResponse) {
 	if !a.Conf.PostAuth.Enabled {
 		return
 	}
+	auth := newPostAuth(req, resp)
 	select {
 	case a.postAuthChannel <- auth:
 	default:

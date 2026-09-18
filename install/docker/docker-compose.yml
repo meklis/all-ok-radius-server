@@ -8,11 +8,13 @@ x-defaults: &defaults
       max-size: "50m"
       max-file: "5"
   env_file:
-    - ../.env
+    - .env
 
 services:
   radius-server:
     <<: *defaults
-    build: radius
+    build:
+      context: ../..
+      dockerfile: install/docker/radius/Dockerfile
     container_name: radius-server
     network_mode: host

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/meklis/all-ok-radius-server/api"
 	"github.com/meklis/all-ok-radius-server/prom"
 	"github.com/meklis/all-ok-radius-server/radius/events"
 	"github.com/meklis/all-ok-radius-server/redback"
@@ -29,7 +28,7 @@ func (rad *Radius) handler(w radius.ResponseWriter, r *radius.Request) {
 }
 
 func (rad *Radius) _handlerProccessApi(request events.AuthRequest) (*events.AuthResponse, error) {
-	resp, err := rad.api.Get(&request)
+	resp, err := rad.processor.Get(&request)
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
@@ -41,11 +40,11 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 	if err != nil {
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.Criticalf("response from radius-server: %v", err.Error())
-		rad.api.SendPostAuth(api.InitPostAuth(req, events.AuthResponse{
+		rad.processor.SendPostAuth(req, events.AuthResponse{
 			Status: "ERROR",
 			Error:  fmt.Sprintf("%v", err),
 			Class:  classId,
-		}))
+		})
 		return
 	}
 	req.Class = classId
@@ -54,20 +53,20 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error get answer from api's: %v", err.Error())
 		rad.lg.DebugF(tracerr.Sprint(err))
-		rad.api.SendPostAuth(api.InitPostAuth(req, events.AuthResponse{
+		rad.processor.SendPostAuth(req, events.AuthResponse{
 			Status: "ERROR",
 			Error:  fmt.Sprintf("%v", err),
 			Class:  classId,
-		}))
+		})
 		return
 	} else if resp.IpAddress == "" && resp.PoolName == "" {
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error get answer from api's: pool_name and ip_address is empty")
-		rad.api.SendPostAuth(api.InitPostAuth(req, events.AuthResponse{
+		rad.processor.SendPostAuth(req, events.AuthResponse{
 			Status: "ERROR",
 			Error:  fmt.Sprintf("%v", err),
 			Class:  classId,
-		}))
+		})
 		return
 	}
 	prom.RadRequestsInc(req.NasIp)
@@ -86,17 +85,17 @@ func (rad *Radius) _handleAuthRequest(w radius.ResponseWriter, r *radius.Request
 	err = rad._respondAuthAccept(*resp, w, r)
 
 	if err != nil {
-		rad.api.SendPostAuth(api.InitPostAuth(req, events.AuthResponse{
+		rad.processor.SendPostAuth(req, events.AuthResponse{
 			Status: "ERROR",
 			Error:  fmt.Sprintf("%v", err),
 			Class:  classId,
-		}))
+		})
 		prom.ErrorsInc(prom.Critical, "radius")
 		rad.lg.CriticalF("error write response: %v", err.Error())
 		rad.lg.DebugF(tracerr.Sprint(err))
 		return
 	} else {
-		rad.api.SendPostAuth(api.InitPostAuth(req, *resp))
+		rad.processor.SendPostAuth(req, *resp)
 	}
 }
 func (rad *Radius) _parseAuthRequest(r *radius.Request) (events.AuthRequest, error) {
@@ -111,9 +110,10 @@ func (rad *Radius) _parseAuthRequest(r *radius.Request) (events.AuthRequest, err
 
 	agent.RemoteId = remoteId
 	rad.lg.DebugF("%v %x: agentRemoteId=%v", r.Code.String(), r.Authenticator, agent.RemoteId)
-	if bts := redback.AgentCircuitID_Get(r.Packet); len(bts) > 2 {
-		agent.RawCircuitId = fmt.Sprintf("%X", bts[2:])
-
+	// байты отдаются как есть - формат содержимого зависит от вендора свитча
+	// и разбирается уже в скрипте/api по db.devices.parse_type, не здесь
+	if bts := redback.AgentCircuitID_Get(r.Packet); len(bts) > 0 {
+		agent.RawCircuitId = fmt.Sprintf("%X", bts)
 	}
 	request := events.AuthRequest{
 		NasIp:          nasIpAddr,
@@ -130,7 +130,7 @@ func (rad *Radius) _handleAccountingRequest(w radius.ResponseWriter, r *radius.R
 	req, _ := rad._parseAccountingRequest(r)
 	prom.RadAcctRequestsInc(req.NasIp, req.DhcpServerName)
 
-	rad.api.SendAcct(&req)
+	rad.processor.SendAcct(&req)
 	r.Code = radius.CodeAccountingResponse
 	w.Write(r.Packet)
 }

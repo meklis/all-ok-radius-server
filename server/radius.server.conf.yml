@@ -6,7 +6,7 @@ logger:
     enabled: true
     enable_color: false
     #Log levels. For production use - level 4, debug - 6
-    log_level: 6
+    log_level: 4
     print_file: true
 
 
@@ -15,23 +15,53 @@ prometheus:
   path: /metrics
   enabled: true
   port: 2112
-  detailed: true
+  detailed: false
 
 
 #Profiler pprof. Must be disabled in production
 profiler:
   port: 2155
-  enabled: false
+  enabled: true
 
 #Конфигурация радиус-сервера
 radius:
   listen_addr: 0.0.0.0:1812
   proto: "udp"
+  # Число горутин-читателей UDP-сокета считается автоматически (NumCPU/2,
+  # не больше 4, не меньше 1) - см. third_party/layeh-radius/README-FORK.md
+  read_buffer_size: 8388608
 # Такие параметры как secret можно вынести в переменные окружения. Для этого вместо значения secret необходимо указать ${RADIUS_SECRET}
 # где RADIUS_SECRET - переменная окружения
   secret: secret
 
-#Конфигурирование работы API.
+#Выбор бэкенда обработки auth/acct/postauth: api (по умолчанию, ниже) или script (Lua, см. блок script)
+processor: script
+
+#Встроенный Lua-скрипт (аналог lua-nginx-module/rlm_python). Используется только при processor: script
+#Каждый метод - свой скрипт (можно указать один и тот же файл для нескольких методов).
+#auth обязателен, acct/post_auth опциональны - если путь не задан, метод просто не обрабатывается скриптом.
+#Скрипт компилируется один раз при старте и выполняется в пуле из pool_size изолированных состояний.
+#Пути ниже - примеры из script/examples (относительно корня репозитория). В проде обычно
+#указывают абсолютный путь, например /etc/radius/scripts/auth.lua
+script:
+  pool_size: 300
+  timeout: 3s
+  auth: script/examples/auth.lua
+  acct: script/examples/acct.lua
+  post_auth: script/examples/post_auth.lua
+  #Опционально: база устройств/смартов/привязок, доступная в скриптах через глобальный db.
+  #Если url не задан - db в скриптах не создаётся.
+  #Адрес базы вынесен в переменную окружения CLIENTDB_URL (аналогично RADIUS_SECRET выше) -
+  #в конфиге он не хранится
+  database:
+    devices_url: ${CLIENTDB_URL}?type=devices # обязательное
+    binds:
+      clients: ${CLIENTDB_URL}?type=binds
+      smart: ${CLIENTDB_URL}?type=smart
+    refresh_interval: 5m
+    timeout: 90s # binds отдаёт сотни тысяч строк - таймаут на весь запрос, включая чтение тела
+
+#Конфигурирование работы API. Используется только при processor: api
 api:
   # Можно указать несколько API адресов. Они будут использоваться равномерно, по принципу round-robin.
   # Можно использовать для распределения нагрузки или как для резервирования.
