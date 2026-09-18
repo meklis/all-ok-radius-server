@@ -39,6 +39,9 @@ type Configuration struct {
 	Radius struct {
 		ListenAddr string `yaml:"listen_addr"`
 		Secret     string `yaml:"secret"`
+		// ReadBufferSize - размер SO_RCVBUF в байтах. 0 - системный default
+		// (обычно net.core.rmem_default, на busy-системах маловат под всплески).
+		ReadBufferSize int `yaml:"read_buffer_size"`
 	} `yaml:"radius"`
 
 	// processor: "api" (по умолчанию) или "script" - выбирает, какой из блоков ниже используется

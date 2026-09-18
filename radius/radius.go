@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -13,11 +14,13 @@ import (
 )
 
 type Radius struct {
-	lg         *logger.Logger
-	listenAddr string
-	secret     string
-	processor  Processor
-	classId    int64
+	lg             *logger.Logger
+	listenAddr     string
+	secret         string
+	readers        int
+	readBufferSize int
+	processor      Processor
+	classId        int64
 	sync.Mutex
 }
 
@@ -25,9 +28,26 @@ func Init() *Radius {
 	rad := new(Radius)
 	rad.listenAddr = "0.0.0.0:1812"
 	rad.secret = "secret"
+	rad.readers = defaultReaders()
 	rad.lg, _ = logger.New("radius", 0, os.Stdout)
 	rad.classId = time.Now().Unix()
 	return rad
+}
+
+// defaultReaders - число горутин-читателей UDP-сокета по умолчанию:
+// NumCPU/2, но не больше 4 и не меньше 1. Больше одного ридера убирает
+// узкое место однопоточного приёма (см. third_party/layeh-radius/README-FORK.md),
+// но дальше упор уже в GC/аллокации при разборе атрибутов и вызове Lua, а не
+// в скорость приёма - раздувать число ридеров вслед за числом ядер смысла нет.
+func defaultReaders() int {
+	n := runtime.NumCPU() / 2
+	if n > 4 {
+		n = 4
+	}
+	if n < 1 {
+		n = 1
+	}
+	return n
 }
 
 func (rad *Radius) getClassId() string {
@@ -50,6 +70,12 @@ func (rad *Radius) SetSecret(secret string) *Radius {
 	return rad
 }
 
+// SetReadBufferSize - размер SO_RCVBUF в байтах. 0 - системный default.
+func (rad *Radius) SetReadBufferSize(n int) *Radius {
+	rad.readBufferSize = n
+	return rad
+}
+
 func (rad *Radius) SetProcessor(p Processor) *Radius {
 	rad.processor = p
 	return rad
@@ -57,12 +83,15 @@ func (rad *Radius) SetProcessor(p Processor) *Radius {
 
 func (rad *Radius) ListenAndServe() error {
 	server := radius.PacketServer{
-		Addr:         rad.listenAddr,
-		Network:      "udp",
-		SecretSource: radius.StaticSecretSource([]byte(rad.secret)),
-		Handler:      radius.HandlerFunc(rad.handler),
+		Addr:           rad.listenAddr,
+		Network:        "udp",
+		SecretSource:   radius.StaticSecretSource([]byte(rad.secret)),
+		Handler:        radius.HandlerFunc(rad.handler),
+		NumReaders:     rad.readers,
+		ReadBufferSize: rad.readBufferSize,
 	}
 
+	rad.lg.NoticeF("radius readers=%v read_buffer_size=%v", rad.readers, rad.readBufferSize)
 	rad.logListenAddr()
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)

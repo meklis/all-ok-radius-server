@@ -6,7 +6,7 @@ logger:
     enabled: true
     enable_color: false
     #Log levels. For production use - level 4, debug - 6
-    log_level: 6
+    log_level: 4
     print_file: true
 
 
@@ -21,12 +21,15 @@ prometheus:
 #Profiler pprof. Must be disabled in production
 profiler:
   port: 2155
-  enabled: false
+  enabled: true
 
 #Конфигурация радиус-сервера
 radius:
   listen_addr: 0.0.0.0:1812
   proto: "udp"
+  # Число горутин-читателей UDP-сокета считается автоматически (NumCPU/2,
+  # не больше 4, не меньше 1) - см. third_party/layeh-radius/README-FORK.md
+  read_buffer_size: 8388608
 # Такие параметры как secret можно вынести в переменные окружения. Для этого вместо значения secret необходимо указать ${RADIUS_SECRET}
 # где RADIUS_SECRET - переменная окружения
   secret: secret
@@ -41,7 +44,7 @@ processor: script
 #Пути ниже - примеры из script/examples (относительно корня репозитория). В проде обычно
 #указывают абсолютный путь, например /etc/radius/scripts/auth.lua
 script:
-  pool_size: 10
+  pool_size: 100
   timeout: 3s
   auth: script/examples/auth.lua
   acct: script/examples/acct.lua

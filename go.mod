@@ -12,3 +12,8 @@ require (
 	gopkg.in/yaml.v2 v2.3.0
 	layeh.com/radius v0.0.0-20190322222518-890bc1058917
 )
+
+// Локальный форк: server-packet.go умеет несколько параллельных ридеров
+// сокета (NumReaders) и настраиваемый SO_RCVBUF (ReadBufferSize) - см.
+// third_party/layeh-radius/README-FORK.md
+replace layeh.com/radius => ./third_party/layeh-radius

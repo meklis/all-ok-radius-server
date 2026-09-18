@@ -96,6 +96,7 @@ func main() {
 		SetListenAddr(Config.Radius.ListenAddr).
 		SetLogger(lg).
 		SetSecret(Config.Radius.Secret).
+		SetReadBufferSize(Config.Radius.ReadBufferSize).
 		ListenAndServe()
 	if err != nil {
 		panic(tracerr.Sprint(err))
