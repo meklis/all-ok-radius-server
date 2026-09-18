@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -104,14 +106,65 @@ func parseMacs(s string) ([][6]byte, error) {
 type Stats struct {
 	Total, Success, Failed       int64
 	SumNanos, MinNanos, MaxNanos int64
+
+	// Разбивка Failed по причине - чтобы отличить "сервер не ответил вовремя"
+	// (таймаут/потеря пакета) от "пришёл неверный ответ" (кривой пакет,
+	// Access-Reject и т.п.)
+	FailTimeout    int64 // ctx deadline exceeded - ответ не пришёл за -timeout
+	FailNetwork    int64 // другая сетевая ошибка (не таймаут)
+	FailBadReponse int64 // ответ пришёл, но это не Access-Accept
+
+	// Cancelled - запросы, прерванные остановкой теста (конец -duration/Ctrl+C),
+	// а не реальной проблемой сервера/сети. Не считаются в Failed - иначе
+	// доля ошибок в конце каждого прогона искусственно завышается тем сильнее,
+	// чем выше concurrency/latency (больше запросов "в полёте" на момент отмены).
+	Cancelled int64
+
+	errMu     sync.Mutex
+	errCounts map[string]int64 // текст ошибки -> сколько раз встретилась (только failNetwork/failBadResponse)
 }
 
-func (s *Stats) record(latency time.Duration, success bool) {
+// recordErr агрегирует текст ошибки/неверного ответа для финального отчёта.
+// Не более 20 разных строк - типов ошибок обычно единицы, защита от роста
+// карты на случай, если текст ошибки содержит что-то вроде адреса/порта.
+func (s *Stats) recordErr(text string) {
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	if s.errCounts == nil {
+		s.errCounts = make(map[string]int64)
+	}
+	if _, ok := s.errCounts[text]; !ok && len(s.errCounts) >= 20 {
+		text = "(другие)"
+	}
+	s.errCounts[text]++
+}
+
+const (
+	failNone = iota
+	failTimeout
+	failNetwork
+	failBadResponse
+	failCancelled
+)
+
+func (s *Stats) record(latency time.Duration, success bool, failReason int) {
+	if failReason == failCancelled {
+		atomic.AddInt64(&s.Cancelled, 1)
+		return
+	}
 	atomic.AddInt64(&s.Total, 1)
 	if success {
 		atomic.AddInt64(&s.Success, 1)
 	} else {
 		atomic.AddInt64(&s.Failed, 1)
+		switch failReason {
+		case failTimeout:
+			atomic.AddInt64(&s.FailTimeout, 1)
+		case failNetwork:
+			atomic.AddInt64(&s.FailNetwork, 1)
+		case failBadResponse:
+			atomic.AddInt64(&s.FailBadReponse, 1)
+		}
 	}
 	n := latency.Nanoseconds()
 	atomic.AddInt64(&s.SumNanos, n)
@@ -187,7 +240,24 @@ func worker(ctx context.Context, opts Options, sites []Site, stats *Stats, seed 
 		cancel()
 
 		success := err == nil && resp != nil && resp.Code == radius.CodeAccessAccept
-		stats.record(latency, success)
+		failReason := failNone
+		if !success {
+			switch {
+			case errors.Is(err, context.Canceled):
+				// остановка теста (конец -duration/Ctrl+C) оборвала запрос
+				// "в полёте" - это не реальная ошибка, см. Stats.Cancelled
+				failReason = failCancelled
+			case errors.Is(err, context.DeadlineExceeded):
+				failReason = failTimeout
+			case err != nil:
+				failReason = failNetwork
+				stats.recordErr(err.Error())
+			default:
+				failReason = failBadResponse
+				stats.recordErr(fmt.Sprintf("код ответа: %v", resp.Code))
+			}
+		}
+		stats.record(latency, success, failReason)
 	}
 }
 
@@ -276,8 +346,24 @@ NAS profiles:  %v
 Запросов всего:             %v
 Успешных ответов:           %v
 Ошибок/неуспешных:          %v
+  из них таймаут (нет ответа за -timeout): %v
+  из них другая сетевая ошибка:            %v
+  из них неверный ответ (не Access-Accept): %v
+Прервано остановкой теста (не ошибка):     %v
 RPS (среднее):               %.1f
 Latency (min/avg/max) ms:    %.2f/%.2f/%.2f
 ==========================================================
-`, elapsed.Round(time.Millisecond), total, success, failed, avgRps, minMs, avgMs, maxMs)
+`, elapsed.Round(time.Millisecond), total, success, failed,
+		atomic.LoadInt64(&stats.FailTimeout), atomic.LoadInt64(&stats.FailNetwork), atomic.LoadInt64(&stats.FailBadReponse),
+		atomic.LoadInt64(&stats.Cancelled),
+		avgRps, minMs, avgMs, maxMs)
+
+	stats.errMu.Lock()
+	if len(stats.errCounts) > 0 {
+		fmt.Println("Тексты ошибок/неверных ответов:")
+		for text, count := range stats.errCounts {
+			fmt.Printf("  %6dx  %v\n", count, text)
+		}
+	}
+	stats.errMu.Unlock()
 }

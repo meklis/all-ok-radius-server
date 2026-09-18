@@ -44,7 +44,7 @@ processor: script
 #Пути ниже - примеры из script/examples (относительно корня репозитория). В проде обычно
 #указывают абсолютный путь, например /etc/radius/scripts/auth.lua
 script:
-  pool_size: 100
+  pool_size: 300
   timeout: 3s
   auth: script/examples/auth.lua
   acct: script/examples/acct.lua
